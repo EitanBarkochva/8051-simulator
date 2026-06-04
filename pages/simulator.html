@@ -1,0 +1,307 @@
+<!DOCTYPE html>
+<html lang="he" dir="rtl">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>8051 Simulator — סביבת עבודה</title>
+  <link rel="stylesheet" href="../css/style.css">
+  <link rel="stylesheet" href="../css/simulator.css">
+  <link rel="stylesheet" href="../css/components.css">
+</head>
+<body>
+  <div class="sim-shell">
+
+    <!-- ===== topbar ===== -->
+    <header class="topbar">
+      <a class="title" href="dashboard.html" title="חזרה לפרויקטים">⚡ 8051 Simulator</a>
+      <input id="project-name" class="project-name" placeholder="שם הפרויקט" value="פרויקט חדש">
+      <button id="btn-save" class="primary">💾 שמור</button>
+      <span class="spacer"></span>
+      <span class="status" id="status">מוכן</span>
+    </header>
+
+    <!-- ===== ספריית רכיבים (שמאל) ===== -->
+    <aside class="library">
+      <h3>ספריית רכיבים</h3>
+      <div class="palette-item" data-type="led">
+        <span class="pi-icon">💡</span>
+        <span class="pi-name">LED</span>
+      </div>
+      <div class="palette-item" data-type="button">
+        <span class="pi-icon">🔘</span>
+        <span class="pi-name">כפתור</span>
+      </div>
+      <div class="palette-item" data-type="sevenseg">
+        <span class="pi-icon">🔢</span>
+        <span class="pi-name">7-Seg</span>
+      </div>
+      <div class="palette-item" data-type="motor">
+        <span class="pi-icon">⚙️</span>
+        <span class="pi-name">מנוע</span>
+      </div>
+      <div class="palette-item" data-type="buzzer">
+        <span class="pi-icon">🔔</span>
+        <span class="pi-name">זמזם</span>
+      </div>
+      <div class="palette-item" data-type="pot">
+        <span class="pi-icon">🎛️</span>
+        <span class="pi-name">פוטנציומטר</span>
+      </div>
+    </aside>
+
+    <!-- ===== קנבס (מרכז) ===== -->
+    <main class="canvas-wrap">
+      <div class="canvas" id="canvas">
+        <div class="canvas-hint">גרור LED לכאן 👈<br>לחץ על פין בשבב ואז על הטרמינל של ה-LED כדי למתוח חוט</div>
+      </div>
+    </main>
+
+    <!-- ===== צד ימין: קוד + רגיסטרים ===== -->
+    <aside class="side">
+      <div class="side-section" id="exercise-panel" style="display:none;"></div>
+      <div class="side-section">
+        <h3>עורך קוד</h3>
+        <textarea id="code-editor" spellcheck="false">// מונה 0-9 על תצוגת 7-segment (חבר 7-Seg ל-P2)
+int digitCode(int d) {
+  int t[] = {0x3F,0x06,0x5B,0x4F,0x66,
+             0x6D,0x7D,0x07,0x7F,0x6F};
+  return t[d];
+}
+int i;
+while (1) {
+  for (i = 0; i < 10; i++) {
+    P2 = digitCode(i);
+    delay(600);
+  }
+}</textarea>
+        <div class="run-row">
+          <button class="primary" id="btn-run">▶ הרץ</button>
+          <button id="btn-stop" disabled>⏹ עצור</button>
+          <button id="btn-reset">איפוס</button>
+        </div>
+        <div id="console"></div>
+      </div>
+
+      <div class="side-section" style="flex:1; overflow-y:auto;">
+        <h3>רגיסטרים</h3>
+        <div class="reg-grid" id="reg-grid"></div>
+      </div>
+    </aside>
+
+  </div>
+
+  <!-- ===== business logic ===== -->
+  <script src="../js/business/registers.js"></script>
+  <script src="../js/business/codeParser.js"></script>
+  <script src="../js/business/components.js"></script>
+  <script src="../js/business/simulator.js"></script>
+  <script src="../js/business/checker.js"></script>
+  <!-- ===== UI ===== -->
+  <script src="../js/ui/canvas.js"></script>
+  <script src="../js/ui/wiring.js"></script>
+  <script src="../js/ui/dragDrop.js"></script>
+  <!-- ===== db ===== -->
+  <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+  <script src="../js/db/config.js"></script>
+  <script src="../js/db/db.js"></script>
+  <script src="../js/db/auth.js"></script>
+  <script src="../js/db/projectService.js"></script>
+  <script src="../js/db/exerciseService.js"></script>
+  <script src="../js/db/lms.js"></script>
+
+  <!-- ===== bootstrap ===== -->
+  <script>
+    (function () {
+      const canvasEl = document.getElementById("canvas");
+      const paletteEl = document.querySelector(".library");
+      const regGrid   = document.getElementById("reg-grid");
+      const consoleEl = document.getElementById("console");
+      const statusEl  = document.getElementById("status");
+
+      // --- רינדור טבלת הרגיסטרים ---
+      function renderRegisters() {
+        regGrid.innerHTML = Registers.PORTS.map((name) => {
+          const val = Registers.get(name);
+          const bits = [7,6,5,4,3,2,1,0].map((b) =>
+            `<span class="bit ${(val >> b) & 1 ? "high" : ""}">${(val >> b) & 1}</span>`
+          ).join("");
+          const hex = "0x" + val.toString(16).toUpperCase().padStart(2, "0");
+          return `<div class="reg-row">
+                    <span class="reg-name">${name}</span>
+                    <span class="bits">${bits}</span>
+                    <span class="reg-hex">${hex}</span>
+                  </div>`;
+        }).join("");
+      }
+
+      const editorEl  = document.getElementById("code-editor");
+      const nameEl    = document.getElementById("project-name");
+      let currentId   = null;   // id הפרויקט הנוכחי (null = עוד לא נשמר)
+
+      // --- אתחול ---
+      Wiring.init(canvasEl);
+      Canvas.init(canvasEl, {
+        onRegisterChange: () => { renderRegisters(); Wiring.redraw(); },
+        onMove: () => Wiring.redraw(),
+      });
+      DragDrop.init(paletteEl, canvasEl);
+
+      // --- שמירה/טעינה של המעגל ---
+      function serializeCircuit() {
+        return { code: editorEl.value, components: Components.serialize(), wires: Wiring.serialize() };
+      }
+      function newCircuit() {
+        Wiring.clear();
+        Canvas.clearComponents();
+        Components.clear();
+        Registers.reset();
+        const mcu = Components.add("mcu", 24, 56);   // שבב 8051 חדש
+        Canvas.renderComponent(mcu);
+        Wiring.redraw();
+        renderRegisters();
+      }
+      function restoreCircuit(data) {
+        Wiring.clear();
+        Canvas.clearComponents();
+        Components.clear();
+        Registers.reset();
+        (data.components || []).forEach((cd) => {
+          const c = Components.addRestored(cd);
+          if (c) Canvas.renderComponent(c);
+        });
+        (data.wires || []).forEach((w) => Wiring.addWire(w.port, w.bit, w.compId));
+        Components.assertAllInputs();   // פוטנציומטרים/כפתורים מזינים את הפורטים
+        Wiring.redraw();
+        editorEl.value = data.code || "";
+        renderRegisters();
+      }
+
+      // טען פרויקט (?project=ID), תרגיל (?exercise=ID), או התחל מעגל חדש
+      const params  = new URLSearchParams(location.search);
+      const projId  = params.get("project");
+      const exId    = params.get("exercise");
+      const asgId   = params.get("assignment");
+
+      async function initWorkspace() {
+        await Auth.requireAuth();   // ודא משתמש מחובר
+        const existing   = projId ? await ProjectService.get(projId) : null;
+        const exercise   = exId ? await ExerciseService.get(exId) : null;
+        const assignment = (asgId && DB.isSupabase) ? await LMS.Assignments.get(asgId) : null;
+
+        if (existing) {
+          currentId = existing.id;
+          nameEl.value = existing.name;
+          restoreCircuit(existing.data || {});
+          statusEl.textContent = "נטען";
+          return;
+        }
+
+        newCircuit();
+        if (assignment && assignment.exercises) {
+          const ex = mapExercise(assignment.exercises);
+          editorEl.value = ex.starterCode || "";
+          nameEl.value = "מטלה: " + (assignment.title || ex.title);
+          renderExercisePanel(ex, asgId);
+        } else if (exercise) {
+          editorEl.value = exercise.starterCode || "";
+          nameEl.value = "פתרון: " + exercise.title;
+          renderExercisePanel(exercise, null);
+        }
+      }
+      // ממיר שורת exercises מ-Supabase למבנה שה-Checker מצפה לו
+      function mapExercise(r) {
+        return { id: r.id, title: r.title, instructions: r.instructions, starterCode: r.starter_code || r.starterCode || "", checks: r.checks || [] };
+      }
+      initWorkspace();
+
+      // --- מצב תרגיל: הוראות + בדיקה אוטומטית ---
+      function renderExercisePanel(ex, assignmentId) {
+        const panel = document.getElementById("exercise-panel");
+        panel.style.display = "block";
+        panel.innerHTML = `
+          <h3>📝 ${escapeHtmlSim(ex.title)}</h3>
+          <p class="ex-instructions">${escapeHtmlSim(ex.instructions).replace(/\n/g, "<br>")}</p>
+          <button class="primary" id="btn-check">${assignmentId ? "✓ בדוק והגש" : "✓ בדוק פתרון"}</button>
+          <div id="check-results"></div>`;
+        panel.querySelector("#btn-check").addEventListener("click", async () => {
+          const btn = panel.querySelector("#btn-check");
+          const out = panel.querySelector("#check-results");
+          btn.disabled = true; out.innerHTML = `<div class="muted">בודק…</div>`;
+          const results = await Checker.run(editorEl.value, ex.checks || []);
+          const passed = results.filter((r) => r.pass).length;
+          let html =
+            `<div class="check-summary ${passed === results.length ? "all-ok" : ""}">${passed}/${results.length} בדיקות עברו ${passed === results.length ? "🎉" : ""}</div>` +
+            results.map((r) => r.error
+              ? `<div class="cr fail">✗ ${escapeHtmlSim(r.desc)} — ${escapeHtmlSim(r.error)}</div>`
+              : `<div class="cr ${r.pass ? "ok" : "fail"}">${r.pass ? "✓" : "✗"} ${escapeHtmlSim(r.desc)}` +
+                (r.pass ? "" : ` <small>(${r.target}: קיבלנו ${r.actual}, ציפינו ${r.expected})</small>`) + `</div>`
+            ).join("");
+          // אם זו מטלה — הגש לשרת (ציון אוטומטי)
+          if (assignmentId && DB.isSupabase) {
+            try {
+              const sub = await LMS.Submissions.submit(assignmentId, {
+                code: editorEl.value, circuit: serializeCircuit(), passed, total: results.length,
+              });
+              html += `<div class="check-summary all-ok">הוגש למורה ✓ (ציון: ${sub.auto_score})</div>`;
+            } catch (e) { html += `<div class="cr fail">שמירת ההגשה נכשלה: ${escapeHtmlSim(e.message)}</div>`; }
+          }
+          out.innerHTML = html;
+          renderRegisters();
+          btn.disabled = false;
+        });
+      }
+      function escapeHtmlSim(s) { return String(s).replace(/[&<>"']/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c])); }
+
+      // --- שמירה ---
+      document.getElementById("btn-save").addEventListener("click", async () => {
+        statusEl.textContent = "שומר…";
+        try {
+          currentId = await ProjectService.save({ id: currentId, name: nameEl.value.trim() || "פרויקט ללא שם", data: serializeCircuit() });
+          history.replaceState(null, "", "?project=" + currentId);
+          statusEl.textContent = "נשמר ✓";
+        } catch (e) { statusEl.textContent = "שגיאה בשמירה: " + e.message; }
+      });
+
+      // --- בקרת ריצה ---
+      const btnRun  = document.getElementById("btn-run");
+      const btnStop = document.getElementById("btn-stop");
+
+      function onStatus(state, info) {
+        switch (state) {
+          case "running":
+            btnRun.disabled = true; btnStop.disabled = false;
+            consoleEl.innerHTML = "";
+            statusEl.textContent = "▶ רץ…";
+            break;
+          case "done":
+            btnRun.disabled = false; btnStop.disabled = true;
+            consoleEl.innerHTML = `<div class="ok">✓ הסתיים</div>`;
+            statusEl.textContent = "הסתיים";
+            break;
+          case "stopped":
+            btnRun.disabled = false; btnStop.disabled = true;
+            statusEl.textContent = "נעצר";
+            break;
+          case "error":
+            btnRun.disabled = false; btnStop.disabled = true;
+            consoleEl.innerHTML = (info || []).map((e) => `<div class="err">⚠ ${e}</div>`).join("");
+            statusEl.textContent = `${(info || []).length} שגיאות`;
+            break;
+        }
+      }
+
+      btnRun.addEventListener("click", () => Simulator.run(editorEl.value, onStatus));
+      btnStop.addEventListener("click", () => Simulator.stop());
+
+      // --- איפוס ---
+      document.getElementById("btn-reset").addEventListener("click", () => {
+        Simulator.stop();
+        Registers.reset();
+        Components.assertAllInputs();   // שמור על ערכי הקלט אחרי איפוס
+        consoleEl.innerHTML = "";
+        statusEl.textContent = "אופס";
+      });
+    })();
+  </script>
+</body>
+</html>

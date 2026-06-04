@@ -1,0 +1,15 @@
+# Harness / editor local config
+.claude/
+
+# OS junk
+Thumbs.db
+desktop.ini
+.DS_Store
+
+# Node (not used now, but just in case)
+node_modules/
+npm-debug.log*
+
+# Logs / temp
+*.log
+*.tmp

@@ -1,0 +1,238 @@
+<!DOCTYPE html>
+<html lang="he" dir="rtl">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>8051 Simulator — ניהול כיתות</title>
+  <link rel="stylesheet" href="../css/style.css">
+  <style>
+    .wrap { max-width: 1100px; margin: 0 auto; padding: 24px 20px; }
+    .head { display: flex; align-items: center; gap: 12px; margin-bottom: 20px; }
+    .head h1 { font-size: 21px; } .head .spacer { flex: 1; }
+    .cols { display: grid; grid-template-columns: 280px 1fr; gap: 18px; align-items: start; }
+    @media (max-width: 800px){ .cols{ grid-template-columns: 1fr; } }
+    .panel { background: var(--panel); border: 1px solid var(--border); border-radius: 12px; padding: 16px; }
+    .panel h2 { font-size: 15px; color: var(--text-dim); margin-bottom: 12px; }
+    input, select, textarea {
+      background: #0c1118; color: var(--text); border: 1px solid var(--border);
+      border-radius: 6px; padding: 8px 10px; font-family: var(--sans); font-size: 14px;
+    }
+    input:focus, select:focus { outline: none; border-color: var(--accent); }
+    .row { display: flex; gap: 8px; flex-wrap: wrap; align-items: center; margin-bottom: 10px; }
+    .class-item { padding: 10px; border: 1px solid var(--border); border-radius: 8px; margin-bottom: 8px; cursor: pointer; background: var(--panel-2); }
+    .class-item.sel { border-color: var(--accent); }
+    .class-item .code { font-family: var(--mono); color: var(--accent); font-size: 13px; }
+    table { width: 100%; border-collapse: collapse; font-size: 13px; }
+    th, td { text-align: right; padding: 7px 8px; border-bottom: 1px solid var(--border); }
+    th { color: var(--text-dim); font-weight: 600; }
+    .muted { color: var(--text-dim); font-size: 13px; }
+    .pill { font-family: var(--mono); font-size: 12px; background: var(--panel-2); border: 1px solid var(--border); border-radius: 5px; padding: 2px 7px; }
+    .sub { margin-top: 18px; }
+    .gradebar { height: 7px; background: var(--panel-2); border-radius: 4px; overflow: hidden; min-width: 80px; display: inline-block; vertical-align: middle; }
+    .gradebar > i { display: block; height: 100%; background: var(--ok); }
+  </style>
+</head>
+<body>
+  <div class="wrap">
+    <div class="head">
+      <h1>🏫 ניהול כיתות</h1>
+      <span class="spacer"></span>
+      <a href="teacher.html"><button>📝 תרגילים</button></a>
+      <a href="dashboard.html"><button>← לדשבורד</button></a>
+    </div>
+
+    <div id="not-teacher" class="panel" style="display:none; color:var(--err)"></div>
+
+    <div class="cols" id="console" style="display:none">
+      <!-- כיתות -->
+      <div class="panel">
+        <h2>הכיתות שלי</h2>
+        <div class="row">
+          <input id="new-class-name" placeholder="שם כיתה חדשה" style="flex:1">
+          <button class="primary" id="btn-create-class">צור</button>
+        </div>
+        <div id="class-list"></div>
+      </div>
+
+      <!-- פרטי כיתה -->
+      <div class="panel" id="detail">
+        <div id="detail-empty" class="muted">בחר כיתה מהרשימה כדי לנהל אותה.</div>
+        <div id="detail-body" style="display:none">
+          <h2 style="display:flex;align-items:center;gap:10px">
+            <span id="cls-name"></span>
+            <span class="muted" style="font-size:12px">קוד הצטרפות:</span>
+            <span class="pill" id="cls-code"></span>
+          </h2>
+
+          <div class="sub">
+            <h2>תלמידים (<span id="members-count">0</span>)</h2>
+            <div id="members"></div>
+          </div>
+
+          <div class="sub">
+            <h2>מטלות</h2>
+            <div class="row">
+              <select id="assign-ex" style="flex:1"></select>
+              <input id="assign-title" placeholder="כותרת (אופציונלי)">
+              <input id="assign-due" type="date">
+              <button class="primary" id="btn-assign">הקצה</button>
+            </div>
+            <div id="assignments"></div>
+          </div>
+
+          <div class="sub" id="grades-wrap" style="display:none">
+            <h2>ציונים — <span id="grade-assign-title"></span></h2>
+            <div id="grades"></div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+  <script src="../js/db/config.js"></script>
+  <script src="../js/db/db.js"></script>
+  <script src="../js/db/auth.js"></script>
+  <script src="../js/db/exerciseService.js"></script>
+  <script src="../js/db/lms.js"></script>
+  <script>
+    (function () {
+      const $ = (id) => document.getElementById(id);
+      const esc = (s) => String(s == null ? "" : s).replace(/[&<>"']/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c]));
+      let selectedClass = null;
+
+      async function init() {
+        const user = await Auth.requireAuth();
+        if (!user) return;
+        if (!DB.isSupabase) { showBlock("פיצ'רי הכיתות דורשים חיבור ל-Supabase (מלא את config.js)."); return; }
+        if (!(await LMS.Profiles.isTeacher())) {
+          showBlock("רק מורים יכולים לנהל כיתות. בקש ממנהל המערכת להגדיר את חשבונך כ-teacher.");
+          return;
+        }
+        $("console").style.display = "grid";
+        await loadExercisesDropdown();
+        await renderClasses();
+      }
+      function showBlock(msg) { const b = $("not-teacher"); b.style.display = "block"; b.textContent = msg; }
+
+      async function loadExercisesDropdown() {
+        const list = await ExerciseService.list();
+        $("assign-ex").innerHTML = list.length
+          ? list.map((e) => `<option value="${e.id}">${esc(e.title)}</option>`).join("")
+          : `<option value="">— אין תרגילים, צור ב"תרגילים" —</option>`;
+      }
+
+      async function renderClasses() {
+        const classes = await LMS.Classes.listMine();
+        $("class-list").innerHTML = classes.length
+          ? classes.map((c) => `<div class="class-item ${selectedClass === c.id ? "sel" : ""}" data-id="${c.id}" data-name="${esc(c.name)}" data-code="${esc(c.join_code)}">
+              <div>${esc(c.name)}</div><div class="code">קוד: ${esc(c.join_code)}</div></div>`).join("")
+          : `<p class="muted">אין כיתות עדיין. צור אחת למעלה.</p>`;
+        $("class-list").querySelectorAll(".class-item").forEach((el) =>
+          el.addEventListener("click", () => selectClass(el.dataset.id, el.dataset.name, el.dataset.code)));
+      }
+
+      async function selectClass(id, name, code) {
+        selectedClass = id;
+        await renderClasses();
+        $("detail-empty").style.display = "none";
+        $("detail-body").style.display = "block";
+        $("cls-name").textContent = name;
+        $("cls-code").textContent = code;
+        $("grades-wrap").style.display = "none";
+        await renderMembers(id);
+        await renderAssignments(id);
+      }
+
+      async function renderMembers(classId) {
+        const members = await LMS.Classes.members(classId);
+        $("members-count").textContent = members.length;
+        $("members").innerHTML = members.length
+          ? `<table><tr><th>שם</th><th>הצטרף/ה</th></tr>${members.map((m) =>
+              `<tr><td>${esc(m.name)}</td><td class="muted">${new Date(m.joinedAt).toLocaleDateString("he-IL")}</td></tr>`).join("")}</table>`
+          : `<p class="muted">אין תלמידים. שתף את קוד ההצטרפות עם התלמידים.</p>`;
+      }
+
+      async function renderAssignments(classId) {
+        const list = await LMS.Assignments.listForClass(classId);
+        $("assignments").innerHTML = list.length
+          ? `<table><tr><th>מטלה</th><th>תרגיל</th><th>תאריך הגשה</th><th></th></tr>${list.map((a) =>
+              `<tr><td>${esc(a.title || "(ללא כותרת)")}</td><td>${esc(a.exercises && a.exercises.title)}</td>
+               <td class="muted">${a.due_at ? new Date(a.due_at).toLocaleDateString("he-IL") : "—"}</td>
+               <td><button class="view-grades" data-id="${a.id}" data-title="${esc(a.title || (a.exercises && a.exercises.title))}">ציונים</button></td></tr>`).join("")}</table>`
+          : `<p class="muted">אין מטלות בכיתה.</p>`;
+        $("assignments").querySelectorAll(".view-grades").forEach((b) =>
+          b.addEventListener("click", () => renderGrades(b.dataset.id, b.dataset.title)));
+      }
+
+      async function renderGrades(assignmentId, title) {
+        $("grades-wrap").style.display = "block";
+        $("grade-assign-title").textContent = title;
+        const rows = await LMS.Grades.gradebook(assignmentId);
+        if (!rows.length) { $("grades").innerHTML = `<p class="muted">עדיין אין הגשות למטלה זו.</p>`; return; }
+        const st = LMS.gradebookStats(rows);
+        $("grades").innerHTML = `
+          <div class="muted" style="margin-bottom:8px">
+            ${st.submitted} הגשות · ממוצע <b>${st.avg}</b> · ${st.fullPass} עברו את כל הבדיקות
+            <button id="export-csv" style="margin-inline-start:10px">⬇ ייצוא CSV</button>
+          </div>
+          <table>
+            <tr><th>תלמיד</th><th>בדיקות</th><th>אוטומטי</th><th>ציון רשמי</th><th>משוב</th><th></th></tr>
+            ${rows.map((r, i) => `<tr data-i="${i}">
+              <td>${esc(r.name)}</td>
+              <td>${r.passed}/${r.total}</td>
+              <td><span class="gradebar"><i style="width:${r.autoScore}%"></i></span> ${r.autoScore}</td>
+              <td><input class="g-score" type="number" min="0" max="100" value="${r.score != null ? r.score : ""}" style="width:58px"></td>
+              <td><input class="g-feedback" value="${esc(r.feedback)}" style="width:100%; min-width:120px"></td>
+              <td><button class="g-save">שמור</button></td>
+            </tr>`).join("")}
+          </table>`;
+        $("export-csv").addEventListener("click", () =>
+          downloadCsv(LMS.gradebookCsv(rows), `grades-${title || "assignment"}.csv`));
+        $("grades").querySelectorAll("tr[data-i]").forEach((tr) => {
+          const r = rows[+tr.dataset.i];
+          tr.querySelector(".g-save").addEventListener("click", async () => {
+            const btn = tr.querySelector(".g-save");
+            try {
+              await LMS.Grades.save({
+                submissionId: r.submissionId, assignmentId, studentId: r.studentId,
+                score: tr.querySelector(".g-score").value, feedback: tr.querySelector(".g-feedback").value,
+              });
+              btn.textContent = "✓ נשמר";
+            } catch (e) { alert("שגיאה: " + e.message); }
+          });
+        });
+      }
+      function downloadCsv(text, filename) {
+        const blob = new Blob([text], { type: "text/csv;charset=utf-8" });
+        const a = document.createElement("a");
+        a.href = URL.createObjectURL(blob); a.download = filename; a.click();
+        URL.revokeObjectURL(a.href);
+      }
+
+      // אירועים
+      $("btn-create-class").addEventListener("click", async () => {
+        const name = $("new-class-name").value.trim();
+        if (!name) return;
+        try { await LMS.Classes.create(name); $("new-class-name").value = ""; renderClasses(); }
+        catch (e) { alert("שגיאה: " + e.message); }
+      });
+      $("btn-assign").addEventListener("click", async () => {
+        const exerciseId = $("assign-ex").value;
+        if (!exerciseId || !selectedClass) { alert("בחר כיתה ותרגיל"); return; }
+        try {
+          await LMS.Assignments.create({
+            classId: selectedClass, exerciseId,
+            title: $("assign-title").value.trim(),
+            dueAt: $("assign-due").value ? new Date($("assign-due").value).toISOString() : null,
+          });
+          $("assign-title").value = "";
+          renderAssignments(selectedClass);
+        } catch (e) { alert("שגיאה: " + e.message); }
+      });
+
+      init();
+    })();
+  </script>
+</body>
+</html>

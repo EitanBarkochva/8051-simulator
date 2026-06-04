@@ -1,0 +1,114 @@
+<!DOCTYPE html>
+<html lang="he" dir="rtl">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>8051 Simulator — ניהול מערכת</title>
+  <link rel="stylesheet" href="../css/style.css">
+  <style>
+    .wrap { max-width: 900px; margin: 0 auto; padding: 24px 20px; }
+    .head { display: flex; align-items: center; gap: 12px; margin-bottom: 20px; }
+    .head h1 { font-size: 21px; } .head .spacer { flex: 1; }
+    .panel { background: var(--panel); border: 1px solid var(--border); border-radius: 12px; padding: 16px; }
+    .panel h2 { font-size: 15px; color: var(--text-dim); margin-bottom: 12px; }
+    table { width: 100%; border-collapse: collapse; font-size: 14px; }
+    th, td { text-align: right; padding: 9px 8px; border-bottom: 1px solid var(--border); }
+    th { color: var(--text-dim); font-weight: 600; }
+    select { background: #0c1118; color: var(--text); border: 1px solid var(--border); border-radius: 6px; padding: 6px 8px; font-size: 13px; }
+    .muted { color: var(--text-dim); font-size: 13px; }
+    .badge { font-size: 11px; padding: 2px 8px; border-radius: 10px; }
+    .badge.student { background: #243447; color: var(--text-dim); }
+    .badge.teacher { background: #1f3a2e; color: var(--ok); }
+    .badge.admin   { background: #3a2630; color: #f9a8d4; }
+    .search { width: 100%; background:#0c1118; color:var(--text); border:1px solid var(--border); border-radius:6px; padding:8px 10px; margin-bottom:12px; }
+    #block { display:none; color: var(--err); }
+  </style>
+</head>
+<body>
+  <div class="wrap">
+    <div class="head">
+      <h1>👑 ניהול מערכת</h1>
+      <span class="spacer"></span>
+      <span id="counts" class="muted"></span>
+      <a href="dashboard.html"><button>← לדשבורד</button></a>
+    </div>
+
+    <div class="panel" id="block"></div>
+
+    <div class="panel" id="main" style="display:none">
+      <h2>משתמשים</h2>
+      <input class="search" id="search" placeholder="חיפוש לפי שם או אימייל…">
+      <div id="users"></div>
+    </div>
+  </div>
+
+  <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+  <script src="../js/db/config.js"></script>
+  <script src="../js/db/db.js"></script>
+  <script src="../js/db/auth.js"></script>
+  <script src="../js/db/lms.js"></script>
+  <script>
+    (function () {
+      const $ = (id) => document.getElementById(id);
+      const esc = (s) => String(s == null ? "" : s).replace(/[&<>"']/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c]));
+      let all = [];
+
+      async function init() {
+        const user = await Auth.requireAuth();
+        if (!user) return;
+        if (!DB.isSupabase) { block("ניהול מערכת דורש חיבור ל-Supabase."); return; }
+        if (!(await LMS.Profiles.isAdmin())) { block("דף זה מיועד למנהלי מערכת (admin) בלבד."); return; }
+        $("main").style.display = "block";
+        all = await LMS.Profiles.listAll();
+        renderCounts();
+        renderUsers("");
+      }
+      function block(msg) { $("block").style.display = "block"; $("block").textContent = msg; }
+
+      function renderCounts() {
+        const c = { student: 0, teacher: 0, admin: 0 };
+        all.forEach((u) => c[u.role] = (c[u.role] || 0) + 1);
+        $("counts").textContent = `${all.length} משתמשים · ${c.student} תלמידים · ${c.teacher} מורים · ${c.admin} מנהלים`;
+      }
+
+      function renderUsers(filter) {
+        const f = filter.trim().toLowerCase();
+        const rows = all.filter((u) =>
+          !f || (u.full_name || "").toLowerCase().includes(f) || (u.email || "").toLowerCase().includes(f));
+        $("users").innerHTML = `
+          <table>
+            <tr><th>שם</th><th>אימייל</th><th>תפקיד</th><th>שינוי תפקיד</th></tr>
+            ${rows.map((u) => `
+              <tr data-id="${u.id}">
+                <td>${esc(u.full_name) || '<span class="muted">(ללא שם)</span>'}</td>
+                <td class="muted">${esc(u.email)}</td>
+                <td><span class="badge ${u.role}">${roleHe(u.role)}</span></td>
+                <td>
+                  <select class="role-sel">
+                    ${["student","teacher","admin"].map((r) => `<option value="${r}" ${r === u.role ? "selected" : ""}>${roleHe(r)}</option>`).join("")}
+                  </select>
+                </td>
+              </tr>`).join("")}
+          </table>`;
+        $("users").querySelectorAll("tr[data-id]").forEach((tr) => {
+          const id = tr.dataset.id;
+          tr.querySelector(".role-sel").addEventListener("change", async (e) => {
+            const role = e.target.value;
+            try {
+              await LMS.Profiles.setRole(id, role);
+              const u = all.find((x) => x.id === id); if (u) u.role = role;
+              renderCounts();
+              tr.querySelector(".badge").className = "badge " + role;
+              tr.querySelector(".badge").textContent = roleHe(role);
+            } catch (err) { alert("שגיאה: " + err.message); e.target.value = (all.find((x) => x.id === id) || {}).role; }
+          });
+        });
+      }
+      function roleHe(r) { return { student: "תלמיד", teacher: "מורה", admin: "מנהל" }[r] || r; }
+
+      $("search").addEventListener("input", (e) => renderUsers(e.target.value));
+      init();
+    })();
+  </script>
+</body>
+</html>

@@ -1,0 +1,167 @@
+/* ===== layout של סביבת העבודה: 3 עמודות ===== */
+.sim-shell {
+  display: grid;
+  grid-template-columns: 200px 1fr 360px;
+  grid-template-rows: 52px 1fr;
+  grid-template-areas:
+    "topbar topbar topbar"
+    "library canvas side";
+  height: 100vh;
+}
+
+/* --- topbar --- */
+.topbar {
+  grid-area: topbar;
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 0 16px;
+  background: var(--panel);
+  border-bottom: 1px solid var(--border);
+}
+.topbar .title { font-size: 16px; font-weight: 700; letter-spacing: .5px; color: var(--text); text-decoration: none; }
+.topbar .title:hover { color: var(--accent); }
+.topbar .spacer { flex: 1; }
+.topbar .status { font-size: 13px; color: var(--text-dim); }
+.project-name {
+  background: #0c1118;
+  color: var(--text);
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  padding: 7px 10px;
+  font-family: var(--sans);
+  font-size: 14px;
+  min-width: 200px;
+}
+.project-name:focus { outline: none; border-color: var(--accent); }
+
+/* --- ספריית רכיבים (שמאל) --- */
+.library {
+  grid-area: library;
+  background: var(--panel);
+  border-left: 1px solid var(--border);
+  padding: 12px;
+  overflow-y: auto;
+}
+.library h3 { font-size: 13px; color: var(--text-dim); margin-bottom: 10px; }
+
+.palette-item {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 10px;
+  margin-bottom: 8px;
+  background: var(--panel-2);
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  cursor: grab;
+  user-select: none;
+}
+.palette-item:active { cursor: grabbing; }
+.palette-item .pi-icon { font-size: 22px; }
+.palette-item .pi-name { font-size: 14px; }
+
+/* --- קנבס (מרכז) --- */
+.canvas-wrap {
+  grid-area: canvas;
+  position: relative;
+  overflow: hidden;
+  background:
+    radial-gradient(circle, #22303f 1px, transparent 1px) 0 0 / 22px 22px,
+    var(--bg);
+}
+.canvas {
+  position: absolute;
+  inset: 0;
+}
+.canvas.drag-over { outline: 2px dashed var(--accent); outline-offset: -8px; }
+
+.canvas-hint {
+  position: absolute;
+  top: 50%; left: 50%;
+  transform: translate(-50%,-50%);
+  color: var(--text-dim);
+  font-size: 14px;
+  text-align: center;
+  pointer-events: none;
+}
+
+/* --- צד ימין: קוד + רגיסטרים --- */
+.side {
+  grid-area: side;
+  display: flex;
+  flex-direction: column;
+  background: var(--panel);
+  border-right: 1px solid var(--border);
+  overflow: hidden;
+}
+.side-section { padding: 12px; border-bottom: 1px solid var(--border); }
+.side-section h3 { font-size: 13px; color: var(--text-dim); margin-bottom: 8px; }
+
+#code-editor {
+  width: 100%;
+  height: 180px;
+  resize: vertical;
+  background: #0c1118;
+  color: var(--text);
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  padding: 10px;
+  font-family: var(--mono);
+  font-size: 13px;
+  line-height: 1.5;
+  direction: ltr;
+  text-align: left;
+}
+
+.run-row { display: flex; gap: 8px; margin-top: 8px; }
+
+#console {
+  margin-top: 8px;
+  font-family: var(--mono);
+  font-size: 12px;
+  min-height: 20px;
+}
+#console .ok  { color: var(--ok); }
+#console .err { color: var(--err); }
+
+/* --- מצב תרגיל --- */
+#exercise-panel .ex-instructions {
+  font-size: 13px; line-height: 1.6; color: var(--text);
+  background: var(--panel-2); border: 1px solid var(--border);
+  border-radius: 6px; padding: 10px; margin-bottom: 10px;
+}
+.check-summary {
+  font-weight: 700; font-size: 14px; margin: 10px 0 6px;
+  color: var(--text-dim);
+}
+.check-summary.all-ok { color: var(--ok); }
+.cr { font-size: 13px; margin-bottom: 4px; line-height: 1.5; }
+.cr.ok { color: var(--ok); }
+.cr.fail { color: var(--err); }
+.cr small { color: var(--text-dim); }
+.muted { color: var(--text-dim); font-size: 13px; }
+
+/* --- טבלת רגיסטרים --- */
+.reg-grid { display: flex; flex-direction: column; gap: 6px; }
+.reg-row {
+  display: grid;
+  grid-template-columns: 44px 1fr auto;
+  align-items: center;
+  gap: 8px;
+  font-family: var(--mono);
+  font-size: 13px;
+}
+.reg-row .reg-name { color: var(--accent); }
+.reg-row .reg-hex  { color: var(--text-dim); }
+.bits { display: flex; gap: 3px; }
+.bit {
+  width: 18px; height: 18px;
+  display: grid; place-items: center;
+  border-radius: 3px;
+  background: var(--pin-low);
+  color: #0c1118;
+  font-size: 11px;
+  font-weight: 700;
+}
+.bit.high { background: var(--pin-high); }

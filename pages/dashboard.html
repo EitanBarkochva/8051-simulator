@@ -1,0 +1,236 @@
+<!DOCTYPE html>
+<html lang="he" dir="rtl">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>8051 Simulator — הפרויקטים שלי</title>
+  <link rel="stylesheet" href="../css/style.css">
+  <style>
+    .dash { max-width: 920px; margin: 0 auto; padding: 32px 20px; }
+    .dash-head {
+      display: flex; align-items: center; gap: 16px; margin-bottom: 28px;
+    }
+    .dash-head h1 { font-size: 22px; }
+    .dash-head .spacer { flex: 1; }
+
+    .grid {
+      display: grid;
+      grid-template-columns: repeat(auto-fill, minmax(240px, 1fr));
+      gap: 16px;
+    }
+    .card {
+      background: var(--panel);
+      border: 1px solid var(--border);
+      border-radius: 12px;
+      padding: 18px;
+      display: flex;
+      flex-direction: column;
+      gap: 10px;
+      transition: border-color .15s, transform .1s;
+    }
+    .card:hover { border-color: var(--accent); }
+    .card h3 { font-size: 16px; word-break: break-word; }
+    .card .meta { font-size: 12px; color: var(--text-dim); }
+    .card .actions { display: flex; gap: 8px; margin-top: auto; }
+    .card .actions button { flex: 1; font-size: 13px; padding: 7px; }
+    .btn-danger { color: var(--err); }
+    .btn-danger:hover { background: rgba(248,113,113,.12); border-color: var(--err); }
+
+    .empty {
+      text-align: center; color: var(--text-dim);
+      padding: 60px 20px; border: 1px dashed var(--border); border-radius: 12px;
+    }
+    .new-card {
+      display: grid; place-items: center; gap: 8px;
+      min-height: 120px; cursor: pointer;
+      border-style: dashed; color: var(--text-dim);
+    }
+    .new-card:hover { color: var(--accent); }
+    .new-card .plus { font-size: 32px; }
+  </style>
+</head>
+<body>
+  <div class="dash">
+    <div class="dash-head">
+      <h1>⚡ הפרויקטים שלי</h1>
+      <span class="spacer"></span>
+      <span id="user-email" class="muted" style="font-size:13px;color:var(--text-dim)"></span>
+      <button id="btn-name" title="ערוך שם" style="display:none">✎</button>
+      <a href="admin.html" id="admin-link" style="display:none"><button>👑 ניהול</button></a>
+      <a href="classes.html"><button>🏫 כיתות (מורה)</button></a>
+      <a href="teacher.html"><button>👩‍🏫 מצב מורה</button></a>
+      <button class="primary" id="btn-new">+ פרויקט חדש</button>
+      <button id="btn-logout">יציאה</button>
+    </div>
+
+    <div id="content"></div>
+
+    <div id="lms-section" style="display:none">
+      <h2 style="margin:30px 0 14px; font-size:18px;">🎯 המטלות שלי</h2>
+      <div id="my-assignments"></div>
+
+      <h2 style="margin:30px 0 14px; font-size:18px;">🏫 הכיתות שלי</h2>
+      <div style="display:flex; gap:8px; margin-bottom:12px; max-width:360px;">
+        <input id="join-code" placeholder="קוד הצטרפות לכיתה" style="flex:1; background:#0c1118; color:var(--text); border:1px solid var(--border); border-radius:6px; padding:8px 10px;">
+        <button class="primary" id="btn-join">הצטרף</button>
+      </div>
+      <div id="my-classes"></div>
+    </div>
+
+    <h2 style="margin:30px 0 14px; font-size:18px;">📝 תרגילים חופשיים</h2>
+    <div id="exercises"></div>
+  </div>
+
+  <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+  <script src="../js/db/config.js"></script>
+  <script src="../js/db/db.js"></script>
+  <script src="../js/db/auth.js"></script>
+  <script src="../js/db/projectService.js"></script>
+  <script src="../js/db/exerciseService.js"></script>
+  <script src="../js/db/lms.js"></script>
+  <script>
+    (function () {
+      const content = document.getElementById("content");
+
+      function fmtDate(ts) {
+        const d = new Date(ts);
+        return d.toLocaleDateString("he-IL") + " " +
+               d.toLocaleTimeString("he-IL", { hour: "2-digit", minute: "2-digit" });
+      }
+
+      async function render() {
+        const projects = await ProjectService.list();
+
+        if (!projects.length) {
+          content.innerHTML = `
+            <div class="empty">
+              עדיין אין פרויקטים שמורים.<br>
+              לחץ על "פרויקט חדש" כדי להתחיל לבנות מעגל.
+            </div>`;
+          return;
+        }
+
+        const cards = projects.map((p) => `
+          <div class="card" data-id="${p.id}">
+            <h3>${escapeHtml(p.name)}</h3>
+            <div class="meta">עודכן: ${fmtDate(p.updatedAt)}</div>
+            <div class="actions">
+              <button class="open">פתח</button>
+              <button class="del btn-danger">מחק</button>
+            </div>
+          </div>`).join("");
+
+        content.innerHTML = `<div class="grid">
+          <div class="card new-card" id="card-new"><span class="plus">+</span><span>פרויקט חדש</span></div>
+          ${cards}
+        </div>`;
+
+        content.querySelectorAll(".card[data-id]").forEach((card) => {
+          const id = card.dataset.id;
+          card.querySelector(".open").addEventListener("click", () => openProject(id));
+          card.querySelector(".del").addEventListener("click", async () => {
+            if (confirm("למחוק את הפרויקט? לא ניתן לשחזר.")) {
+              await ProjectService.remove(id);
+              render();
+            }
+          });
+        });
+        const nc = document.getElementById("card-new");
+        if (nc) nc.addEventListener("click", newProject);
+      }
+
+      function openProject(id) { location.href = "simulator.html?project=" + id; }
+      function newProject()    { location.href = "simulator.html"; }
+
+      function escapeHtml(s) {
+        return String(s).replace(/[&<>"']/g, (c) =>
+          ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c]));
+      }
+
+      async function renderExercises() {
+        const box = document.getElementById("exercises");
+        const list = await ExerciseService.list();
+        box.innerHTML = list.length
+          ? `<div class="grid">${list.map((e) => `
+              <div class="card" data-id="${e.id}">
+                <h3>${escapeHtml(e.title)}</h3>
+                <div class="meta">${e.checks} בדיקות אוטומטיות</div>
+                <div class="actions"><button class="solve">פתור</button></div>
+              </div>`).join("")}</div>`
+          : `<div class="empty">אין תרגילים עדיין. צור תרגיל ב"מצב מורה".</div>`;
+        box.querySelectorAll(".card[data-id]").forEach((c) =>
+          c.querySelector(".solve").addEventListener("click", () => location.href = "simulator.html?exercise=" + c.dataset.id));
+      }
+
+      // --- LMS: כיתות ומטלות (רק במצב Supabase) ---
+      async function renderLms() {
+        if (!DB.isSupabase) return;
+        document.getElementById("lms-section").style.display = "block";
+        await renderMyAssignments();
+        await renderMyClasses();
+      }
+      async function renderMyAssignments() {
+        const box = document.getElementById("my-assignments");
+        let list = [];
+        try { list = await LMS.Assignments.listForStudent(); } catch (e) {}
+        box.innerHTML = list.length
+          ? `<div class="grid">${list.map((a) => `
+              <div class="card" data-id="${a.id}">
+                <h3>${escapeHtml(a.title || (a.exercises && a.exercises.title) || "מטלה")}</h3>
+                <div class="meta">כיתה: ${escapeHtml(a.classes && a.classes.name)} · הגשה: ${a.due_at ? fmtDate(a.due_at) : "—"}</div>
+                <div class="actions"><button class="solve">פתור והגש</button></div>
+              </div>`).join("")}</div>`
+          : `<div class="empty">אין מטלות. הצטרף לכיתה עם קוד כדי לקבל מטלות.</div>`;
+        box.querySelectorAll(".card[data-id]").forEach((c) =>
+          c.querySelector(".solve").addEventListener("click", () => location.href = "simulator.html?assignment=" + c.dataset.id));
+      }
+      async function renderMyClasses() {
+        const box = document.getElementById("my-classes");
+        let list = [];
+        try { list = await LMS.Classes.myEnrolled(); } catch (e) {}
+        box.innerHTML = list.length
+          ? `<div class="grid">${list.map((c) => `<div class="card"><h3>${escapeHtml(c.name)}</h3></div>`).join("")}</div>`
+          : `<div class="empty">עוד לא הצטרפת לכיתות.</div>`;
+      }
+      document.getElementById("btn-join").addEventListener("click", async () => {
+        const code = document.getElementById("join-code").value.trim();
+        if (!code) return;
+        try { await LMS.Classes.join(code); document.getElementById("join-code").value = ""; renderMyClasses(); renderMyAssignments(); }
+        catch (e) { alert("שגיאה: " + e.message); }
+      });
+
+      document.getElementById("btn-new").addEventListener("click", newProject);
+      document.getElementById("btn-logout").addEventListener("click", () => Auth.signOut());
+
+      // שער כניסה: ודא משתמש מחובר, ואז טען
+      async function refreshIdentity(user) {
+        const span = document.getElementById("user-email");
+        const btn = document.getElementById("btn-name");
+        if (!DB.isSupabase) { span.textContent = user.email || ""; return; }
+        let prof = null;
+        try { prof = await LMS.Profiles.me(); } catch (e) {}
+        const nm = prof && prof.full_name ? prof.full_name : "";
+        span.textContent = (nm ? nm + " · " : "") + (user.email || "");
+        btn.style.display = "inline-block";
+        if (!nm) span.textContent = "⚠ הגדר שם · " + (user.email || "");
+        if (prof && prof.role === "admin") document.getElementById("admin-link").style.display = "inline-block";
+      }
+      document.getElementById("btn-name").addEventListener("click", async () => {
+        const name = prompt("השם המלא שלך (יוצג למורים ברשימות וציונים):");
+        if (name == null) return;
+        try { await LMS.Profiles.updateName(name.trim()); refreshIdentity(await Auth.getUser()); }
+        catch (e) { alert("שגיאה: " + e.message); }
+      });
+
+      (async () => {
+        const user = await Auth.requireAuth();
+        if (!user) return;                       // הופנה ל-login
+        await refreshIdentity(user);
+        render();
+        renderExercises();
+        renderLms();
+      })();
+    })();
+  </script>
+</body>
+</html>

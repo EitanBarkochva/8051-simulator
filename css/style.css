@@ -1,0 +1,48 @@
+/* ===== ריסט + עיצוב כללי ===== */
+* { margin: 0; padding: 0; box-sizing: border-box; }
+
+:root {
+  --bg:        #0f1620;
+  --panel:     #18222f;
+  --panel-2:   #1f2c3d;
+  --border:    #2c3e52;
+  --text:      #e6edf3;
+  --text-dim:  #8aa0b6;
+  --accent:    #3da9fc;
+  --accent-2:  #2563eb;
+  --ok:        #34d399;
+  --err:       #f87171;
+  --led-off:   #3a1414;
+  --pin-low:   #44525f;
+  --pin-high:  #34d399;
+  --mono: "Consolas", "Courier New", monospace;
+  --sans: "Segoe UI", system-ui, sans-serif;
+}
+
+html, body {
+  height: 100%;
+  background: var(--bg);
+  color: var(--text);
+  font-family: var(--sans);
+}
+
+button {
+  font-family: inherit;
+  cursor: pointer;
+  border: none;
+  border-radius: 6px;
+  padding: 8px 14px;
+  background: var(--panel-2);
+  color: var(--text);
+  border: 1px solid var(--border);
+  transition: background .15s, border-color .15s;
+}
+button:hover { background: var(--border); }
+
+button.primary {
+  background: var(--accent-2);
+  border-color: var(--accent);
+}
+button.primary:hover { background: var(--accent); }
+
+h1, h2, h3 { font-weight: 600; }

@@ -1,0 +1,230 @@
+<!DOCTYPE html>
+<html lang="he" dir="rtl">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>8051 Simulator — מצב מורה</title>
+  <link rel="stylesheet" href="../css/style.css">
+  <style>
+    .wrap { max-width: 1000px; margin: 0 auto; padding: 28px 20px; }
+    .head { display: flex; align-items: center; gap: 14px; margin-bottom: 22px; }
+    .head h1 { font-size: 22px; }
+    .head .spacer { flex: 1; }
+    .cols { display: grid; grid-template-columns: 1fr 300px; gap: 20px; align-items: start; }
+    @media (max-width: 820px) { .cols { grid-template-columns: 1fr; } }
+
+    .panel { background: var(--panel); border: 1px solid var(--border); border-radius: 12px; padding: 18px; }
+    .panel h2 { font-size: 15px; color: var(--text-dim); margin-bottom: 12px; }
+    label.field { display: block; margin-bottom: 14px; font-size: 13px; color: var(--text-dim); }
+    label.field input[type=text], label.field textarea {
+      display: block; width: 100%; margin-top: 5px;
+      background: #0c1118; color: var(--text); border: 1px solid var(--border);
+      border-radius: 6px; padding: 8px 10px; font-family: var(--sans); font-size: 14px;
+    }
+    label.field textarea { font-family: var(--mono); direction: ltr; text-align: left; resize: vertical; }
+    label.field input:focus, label.field textarea:focus { outline: none; border-color: var(--accent); }
+
+    .check { border: 1px solid var(--border); border-radius: 8px; padding: 12px; margin-bottom: 10px; background: var(--panel-2); }
+    .check .row { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; font-size: 13px; margin-bottom: 8px; }
+    .check .row:last-child { margin-bottom: 0; }
+    .check select, .check input[type=text] {
+      background: #0c1118; color: var(--text); border: 1px solid var(--border);
+      border-radius: 5px; padding: 5px 7px; font-family: var(--mono); font-size: 13px;
+    }
+    .check input.desc { flex: 1; min-width: 160px; font-family: var(--sans); }
+    .check input.val { width: 70px; }
+    .check .del { margin-inline-start: auto; color: var(--err); background: transparent; border: none; cursor: pointer; }
+    .muted { color: var(--text-dim); }
+
+    .ex-item { display: flex; align-items: center; gap: 8px; padding: 9px; border: 1px solid var(--border); border-radius: 8px; margin-bottom: 8px; background: var(--panel-2); }
+    .ex-item .t { flex: 1; font-size: 14px; }
+    .ex-item .t small { color: var(--text-dim); display: block; font-size: 11px; }
+    .ex-item button { padding: 5px 8px; font-size: 12px; }
+    .hint { font-size: 12px; color: var(--text-dim); line-height: 1.6; }
+  </style>
+</head>
+<body>
+  <div class="wrap">
+    <div class="head">
+      <h1>👩‍🏫 מצב מורה — יצירת תרגיל</h1>
+      <span class="spacer"></span>
+      <a href="dashboard.html"><button>← לפרויקטים</button></a>
+    </div>
+
+    <div class="cols">
+      <!-- עורך התרגיל -->
+      <div class="panel">
+        <h2>פרטי התרגיל</h2>
+        <label class="field">כותרת
+          <input type="text" id="title" placeholder="לדוגמה: הדלקת LED על P1.0">
+        </label>
+        <label class="field">הוראות לתלמיד
+          <textarea id="instructions" rows="3" placeholder="כתוב כאן מה התלמיד צריך לעשות…"></textarea>
+        </label>
+        <label class="field">קוד התחלתי (אופציונלי)
+          <textarea id="starter" rows="4" spellcheck="false" placeholder="// קוד שהתלמיד מתחיל ממנו"></textarea>
+        </label>
+
+        <h2 style="margin-top:18px">בדיקות אוטומטיות</h2>
+        <p class="hint" style="margin-bottom:10px">
+          כל בדיקה: (אופציונלי) מזריקים קלט לפורט, מריצים את קוד התלמיד, ובודקים שהפלט הצפוי מתקבל.
+          ערכים אפשר לכתוב כ-<code>0xFF</code> או כ-<code>255</code>.
+        </p>
+        <div id="checks"></div>
+        <button id="add-check">+ הוסף בדיקה</button>
+
+        <div style="margin-top:18px; display:flex; gap:8px;">
+          <button class="primary" id="save">💾 שמור תרגיל</button>
+          <button id="new">תרגיל חדש</button>
+          <button id="open" disabled>▶ פתח בסימולטור לבדיקה</button>
+        </div>
+        <div id="status" class="muted" style="margin-top:8px; font-size:13px;"></div>
+      </div>
+
+      <!-- רשימת תרגילים -->
+      <div class="panel">
+        <h2>תרגילים קיימים</h2>
+        <div id="ex-list"></div>
+      </div>
+    </div>
+  </div>
+
+  <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+  <script src="../js/db/config.js"></script>
+  <script src="../js/db/db.js"></script>
+  <script src="../js/db/auth.js"></script>
+  <script src="../js/db/exerciseService.js"></script>
+  <script>
+    (function () {
+      const $ = (id) => document.getElementById(id);
+      const PORTS = ["P0","P1","P2","P3"];
+      let currentId = null;
+
+      function parseVal(s) {
+        s = String(s).trim();
+        if (/^0x[0-9a-f]+$/i.test(s)) return parseInt(s, 16);
+        if (/^0b[01]+$/i.test(s)) return parseInt(s.slice(2), 2);
+        if (/^\d+$/.test(s)) return parseInt(s, 10);
+        return 0;
+      }
+      const bitOpts = () => `<option value="">פורט שלם</option>` + [0,1,2,3,4,5,6,7].map(b=>`<option value="${b}">.${b}</option>`).join("");
+      const portOpts = (sel) => PORTS.map(p=>`<option ${p===sel?"selected":""}>${p}</option>`).join("");
+
+      // --- שורת בדיקה ---
+      function addCheckRow(data) {
+        data = data || {};
+        const el = document.createElement("div");
+        el.className = "check";
+        const inp = data.input || {};
+        el.innerHTML = `
+          <div class="row">
+            <input type="text" class="desc" placeholder="תיאור הבדיקה (למשל: P1.0 נדלק)" value="${(data.desc||"").replace(/"/g,'&quot;')}">
+            <button class="del" title="מחק">✕</button>
+          </div>
+          <div class="row">
+            <span class="muted">קלט (אופציונלי):</span>
+            <label><input type="checkbox" class="in-on" ${data.input?"checked":""}> הזרק</label>
+            <select class="in-port">${portOpts(inp.port||"P3")}</select>
+            <select class="in-bit">${bitOpts()}</select>
+            <input type="text" class="val in-val" placeholder="ערך" value="${inp.value!=null?inp.value:""}">
+          </div>
+          <div class="row">
+            <span class="muted">צפוי שֶׁ־</span>
+            <select class="ex-port">${portOpts(data.expectPort||"P1")}</select>
+            <select class="ex-bit">${bitOpts()}</select>
+            <span class="muted">יהיה</span>
+            <input type="text" class="val ex-val" placeholder="ערך" value="${data.expectValue!=null?data.expectValue:""}">
+          </div>`;
+        if (inp.bit != null) el.querySelector(".in-bit").value = String(inp.bit);
+        if (data.expectBit != null) el.querySelector(".ex-bit").value = String(data.expectBit);
+        el.querySelector(".del").addEventListener("click", () => el.remove());
+        $("checks").appendChild(el);
+      }
+
+      function gatherChecks() {
+        return [...document.querySelectorAll(".check")].map((el) => {
+          const inOn = el.querySelector(".in-on").checked;
+          const inBit = el.querySelector(".in-bit").value;
+          const exBit = el.querySelector(".ex-bit").value;
+          return {
+            desc: el.querySelector(".desc").value.trim() || "בדיקה",
+            input: inOn ? {
+              port: el.querySelector(".in-port").value,
+              bit: inBit === "" ? null : +inBit,
+              value: parseVal(el.querySelector(".in-val").value),
+            } : null,
+            expectPort: el.querySelector(".ex-port").value,
+            expectBit: exBit === "" ? null : +exBit,
+            expectValue: parseVal(el.querySelector(".ex-val").value),
+          };
+        });
+      }
+
+      // --- טעינה/שמירה ---
+      function loadInto(ex) {
+        currentId = ex ? ex.id : null;
+        $("title").value = ex ? ex.title : "";
+        $("instructions").value = ex ? ex.instructions : "";
+        $("starter").value = ex ? ex.starterCode : "";
+        $("checks").innerHTML = "";
+        (ex && ex.checks || []).forEach(addCheckRow);
+        if (!(ex && ex.checks && ex.checks.length)) addCheckRow();
+        $("open").disabled = !currentId;
+        $("status").textContent = ex ? `נטען: ${ex.title}` : "";
+      }
+
+      async function renderList() {
+        const list = await ExerciseService.list();
+        $("ex-list").innerHTML = list.length
+          ? list.map((e) => `
+              <div class="ex-item" data-id="${e.id}">
+                <div class="t">${escapeHtml(e.title)}<small>${e.checks} בדיקות</small></div>
+                <button class="ld">ערוך</button>
+                <button class="op">פתח</button>
+                <button class="rm" style="color:var(--err)">מחק</button>
+              </div>`).join("")
+          : `<p class="muted">אין תרגילים עדיין.</p>`;
+        $("ex-list").querySelectorAll(".ex-item").forEach((it) => {
+          const id = it.dataset.id;
+          it.querySelector(".ld").addEventListener("click", async () => loadInto(await ExerciseService.get(id)));
+          it.querySelector(".op").addEventListener("click", () => location.href = "simulator.html?exercise=" + id);
+          it.querySelector(".rm").addEventListener("click", async () => {
+            if (confirm("למחוק את התרגיל?")) { await ExerciseService.remove(id); renderList(); }
+          });
+        });
+      }
+
+      function escapeHtml(s) { return String(s).replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c])); }
+
+      // --- אירועים ---
+      $("add-check").addEventListener("click", () => addCheckRow());
+      $("new").addEventListener("click", () => { loadInto(null); addCheckRow(); });
+      $("save").addEventListener("click", async () => {
+        $("status").textContent = "שומר…";
+        try {
+          currentId = await ExerciseService.save({
+            id: currentId,
+            title: $("title").value.trim() || "תרגיל ללא שם",
+            instructions: $("instructions").value,
+            starterCode: $("starter").value,
+            checks: gatherChecks(),
+          });
+          $("open").disabled = false;
+          $("status").textContent = "נשמר ✓";
+          renderList();
+        } catch (e) { $("status").textContent = "שגיאה בשמירה: " + e.message; }
+      });
+      $("open").addEventListener("click", () => { if (currentId) location.href = "simulator.html?exercise=" + currentId; });
+
+      // שער כניסה ואז טעינה
+      (async () => {
+        const user = await Auth.requireAuth();
+        if (!user) return;
+        loadInto(null);
+        addCheckRow();
+        renderList();
+      })();
+    })();
+  </script>
+</body>
+</html>
