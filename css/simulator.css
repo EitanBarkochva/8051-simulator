@@ -61,14 +61,14 @@
 .palette-item .pi-icon { font-size: 22px; }
 .palette-item .pi-name { font-size: 14px; }
 
-/* --- קנבס (מרכז) --- */
+/* --- קנבס (מרכז) — רקע לבן עם רשת אפורה בהירה --- */
 .canvas-wrap {
   grid-area: canvas;
   position: relative;
   overflow: hidden;
   background:
-    radial-gradient(circle, #22303f 1px, transparent 1px) 0 0 / 22px 22px,
-    var(--bg);
+    radial-gradient(circle, #c8cfd6 1px, transparent 1px) 0 0 / 22px 22px,
+    #ffffff;
 }
 .canvas {
   position: absolute;
@@ -80,7 +80,7 @@
   position: absolute;
   top: 50%; left: 50%;
   transform: translate(-50%,-50%);
-  color: var(--text-dim);
+  color: #6b7682;
   font-size: 14px;
   text-align: center;
   pointer-events: none;

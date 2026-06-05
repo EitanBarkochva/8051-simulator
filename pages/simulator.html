@@ -47,6 +47,14 @@
         <span class="pi-icon">🎛️</span>
         <span class="pi-name">פוטנציומטר</span>
       </div>
+      <div class="palette-item" data-type="lightsensor">
+        <span class="pi-icon">🔆</span>
+        <span class="pi-name">חיישן אור</span>
+      </div>
+      <div class="palette-item" data-type="breadboard">
+        <span class="pi-icon">🧰</span>
+        <span class="pi-name">לוח ניסויים</span>
+      </div>
     </aside>
 
     <!-- ===== קנבס (מרכז) ===== -->
@@ -61,17 +69,11 @@
       <div class="side-section" id="exercise-panel" style="display:none;"></div>
       <div class="side-section">
         <h3>עורך קוד</h3>
-        <textarea id="code-editor" spellcheck="false">// מונה 0-9 על תצוגת 7-segment (חבר 7-Seg ל-P2)
-int digitCode(int d) {
-  int t[] = {0x3F,0x06,0x5B,0x4F,0x66,
-             0x6D,0x7D,0x07,0x7F,0x6F};
-  return t[d];
-}
-int i;
-while (1) {
-  for (i = 0; i < 10; i++) {
-    P2 = digitCode(i);
-    delay(600);
+        <textarea id="code-editor" spellcheck="false">void main() {
+  // כתוב את הקוד שלך כאן
+
+  while (1) {
+
   }
 }</textarea>
         <div class="run-row">
@@ -169,8 +171,7 @@ while (1) {
           const c = Components.addRestored(cd);
           if (c) Canvas.renderComponent(c);
         });
-        (data.wires || []).forEach((w) => Wiring.addWire(w.port, w.bit, w.compId));
-        Components.assertAllInputs();   // פוטנציומטרים/כפתורים מזינים את הפורטים
+        Wiring.load(data.wires);        // טוען חוטים + פותר את הרשת (כולל ברידבורד)
         Wiring.redraw();
         editorEl.value = data.code || "";
         renderRegisters();

@@ -1,172 +1,167 @@
 /* ============================================================
- * wiring.js — ציור חוטים בין פיני ה-MCU לטרמינלים של רכיבים
- * אינטראקציה: לוחצים על פין → לוחצים על טרמינל (או הפוך) → נוצר חוט.
- * החוט קובע את comp.source, ולכן את מצב הרכיב. Esc / לחיצה בריק = ביטול.
- * לחיצה על חוט קיים מוחקת אותו.
+ * wiring.js — חיווט בגרירה + פותר-רשת (כולל ברידבורד)
+ * נקודות חיבור: .pin (8051), .lead (רגל רכיב), .hole (חור בברידבורד).
+ * חורים באותה עמודה-חצי חולקים node (מחוברים חשמלית).
+ * פותר: פין שמחובר ל-node "מאכלס" אותו; רגל שמחוברת לאותו node מקבלת
+ * את האות. כך בונים מעגל על הלוח.
  * ============================================================ */
 window.Wiring = (function () {
 
   const SVGNS = "http://www.w3.org/2000/svg";
-  let canvasEl = null;
-  let svg = null;
-  let preview = null;        // קו תצוגה מקדימה בזמן חיבור
-  let pending = null;        // הקצה הראשון שנבחר: { kind, port, bit, compId, el }
-  const wires = [];          // { id, port, bit, compId }
+  let canvasEl = null, svg = null, preview = null, drag = null;
+  const wires = [];      // { id, a, b }  — כל קצה: {t,...}
   let seq = 0;
 
   function init(el) {
     canvasEl = el;
-
     svg = document.createElementNS(SVGNS, "svg");
     svg.setAttribute("class", "wires");
     canvasEl.appendChild(svg);
-
-    // האזנה מרוכזת ללחיצות על פינים / טרמינלים
-    canvasEl.addEventListener("click", onCanvasClick);
-    canvasEl.addEventListener("mousemove", onMouseMove);
-    document.addEventListener("keydown", (e) => { if (e.key === "Escape") cancel(); });
+    canvasEl.addEventListener("mousedown", onMouseDown);
+    document.addEventListener("keydown", (e) => { if (e.key === "Escape") cancelDrag(); });
   }
 
-  function onCanvasClick(e) {
-    const pin = e.target.closest(".pin");
-    const term = e.target.closest(".terminal");
+  /* ---------- זיהוי קצה ---------- */
+  function endpointFrom(target) {
+    if (!target || !target.closest) return null;
+    const pin = target.closest(".pin");
+    if (pin) return { t: "pin", port: pin.dataset.port, bit: +pin.dataset.bit, el: pin };
+    const hole = target.closest(".hole");
+    if (hole) return { t: "hole", node: hole.dataset.node, holeKey: hole.dataset.hole, el: hole };
+    const lead = target.closest(".lead");
+    if (lead) return { t: "lead", compId: +lead.dataset.comp, leg: +lead.dataset.leg || 0, el: lead };
+    return null;
+  }
+  const strip = (ep) =>
+    ep.t === "pin"  ? { t: "pin", port: ep.port, bit: ep.bit } :
+    ep.t === "hole" ? { t: "hole", node: ep.node, holeKey: ep.holeKey } :
+                      { t: "lead", compId: ep.compId, leg: ep.leg };
 
-    if (pin) {
-      handleEndpoint({ kind: "pin", port: pin.dataset.port, bit: +pin.dataset.bit, el: pin });
-      return;
+  /* ---------- גרירה ---------- */
+  function onMouseDown(e) {
+    const ep = endpointFrom(e.target);
+    if (!ep) return;
+    e.preventDefault();
+    drag = ep; ep.el.classList.add("wiring-active");
+    document.addEventListener("mousemove", onDragMove);
+    document.addEventListener("mouseup", onDragUp);
+  }
+  function onDragMove(e) {
+    if (!drag) return;
+    const c = canvasEl.getBoundingClientRect(), a = center(drag.el);
+    if (!preview) { preview = document.createElementNS(SVGNS, "line"); preview.setAttribute("class", "wire preview"); svg.appendChild(preview); }
+    preview.setAttribute("x1", a.x); preview.setAttribute("y1", a.y);
+    preview.setAttribute("x2", e.clientX - c.left); preview.setAttribute("y2", e.clientY - c.top);
+  }
+  function onDragUp(e) {
+    if (!drag) return;
+    const other = endpointFrom(document.elementFromPoint(e.clientX, e.clientY));
+    if (other && other.el !== drag.el) {
+      wires.push({ id: ++seq, a: strip(drag), b: strip(other) });
+      resolve(); redraw();
     }
-    if (term) {
-      handleEndpoint({ kind: "terminal", compId: +term.dataset.comp, el: term });
-      return;
-    }
-    // לחיצה בריק → ביטול חיבור פעיל
-    if (pending) cancel();
+    cancelDrag();
   }
-
-  /** בחירת קצה: צריך פין אחד + טרמינל אחד כדי לסגור חוט */
-  function handleEndpoint(ep) {
-    if (!pending) { startPending(ep); return; }
-    if (pending.kind === ep.kind) { startPending(ep); return; }  // אותו סוג → החלף בחירה
-
-    const pinSide  = pending.kind === "pin" ? pending : ep;
-    const termSide = pending.kind === "terminal" ? pending : ep;
-    connect(pinSide, termSide);
-    cancel();
-  }
-
-  function startPending(ep) {
-    cancel();
-    pending = ep;
-    ep.el.classList.add("wiring-active");
-  }
-
-  function cancel() {
-    if (pending) pending.el.classList.remove("wiring-active");
-    pending = null;
+  function cancelDrag() {
+    if (drag) drag.el.classList.remove("wiring-active");
+    drag = null;
     if (preview) { preview.remove(); preview = null; }
+    document.removeEventListener("mousemove", onDragMove);
+    document.removeEventListener("mouseup", onDragUp);
   }
 
-  /** יצירת חוט בין פין לטרמינל */
-  function connect(pinSide, termSide) {
-    const comp = Components.get(termSide.compId);
-    if (!comp) return;
-
-    // טרמינל של LED מחזיק חוט אחד — החלף אם כבר קיים
-    removeWiresForComp(comp.id);
-
-    comp.source = { port: pinSide.port, bit: pinSide.bit };
-    wires.push({ id: ++seq, port: pinSide.port, bit: pinSide.bit, compId: comp.id });
-
-    Components.assertInput(comp);   // רכיב-קלט (פוטנציומטר) מזין מיד את הפורט
-    redraw();
-    Canvas.refresh(comp);
+  /* ---------- פותר-רשת: בונה מחדש את comp.conns מכל החוטים ---------- */
+  function resolve() {
+    Components.items.forEach((c) => { if (c.conns) c.conns = {}; });
+    const nodeSignal = {};   // nodeId → {port,bit}
+    // שלב 1: פין↔חור קובע את אות ה-node
+    wires.forEach((w) => {
+      const pin = pick(w, "pin"), hole = pick(w, "hole");
+      if (pin && hole) nodeSignal[hole.node] = { port: pin.port, bit: pin.bit };
+    });
+    // שלב 2: רגל↔פין (ישיר) או רגל↔חור (דרך ה-node)
+    wires.forEach((w) => {
+      const lead = pick(w, "lead"); if (!lead) return;
+      const other = w.a.t === "lead" ? w.b : w.a;
+      let sig = null;
+      if (other.t === "pin") sig = { port: other.port, bit: other.bit };
+      else if (other.t === "hole") sig = nodeSignal[other.node] || null;
+      if (sig) { const c = Components.get(lead.compId); if (c) c.conns[lead.leg] = sig; }
+    });
+    Components.assertAllInputs();
+    if (window.Canvas && Canvas.refreshAll) Canvas.refreshAll();
   }
+  const pick = (w, t) => (w.a.t === t ? w.a : w.b.t === t ? w.b : null);
 
-  /** ---- שמירה/טעינה ---- */
-  function serialize() {
-    return wires.map((w) => ({ port: w.port, bit: w.bit, compId: w.compId }));
-  }
+  /* ---------- שמירה/טעינה ---------- */
+  function serialize() { return wires.map((w) => ({ a: w.a, b: w.b })); }
   function clear() {
     wires.length = 0;
-    if (svg) [...svg.querySelectorAll("line.wire")].forEach((l) => l.remove());
+    if (svg) [...svg.querySelectorAll("line.wire:not(.preview)")].forEach((l) => l.remove());
   }
-  /** הוספת חוט מנתונים שמורים (קושר פין↔רכיב לפי id) */
-  function addWire(port, bit, compId) {
-    const comp = Components.get(compId);
-    if (!comp) return;
-    removeWiresForComp(compId);
-    comp.source = { port, bit };
-    wires.push({ id: ++seq, port, bit, compId });
+  /** טעינה: תומך בפורמט החדש {a,b} ובישן {port,bit,compId,leg} */
+  function load(arr) {
+    (arr || []).forEach((w) => {
+      if (w.a && w.b) wires.push({ id: ++seq, a: w.a, b: w.b });
+      else if (w.port != null && w.compId != null)
+        wires.push({ id: ++seq, a: { t: "pin", port: w.port, bit: w.bit }, b: { t: "lead", compId: w.compId, leg: w.leg || 0 } });
+    });
+    resolve();
   }
-
+  /** הסרת כל החוטים הקשורים לרכיב (במחיקתו) — לפי רגל או חורי-לוח */
   function removeWiresForComp(compId) {
     for (let i = wires.length - 1; i >= 0; i--) {
-      if (wires[i].compId === compId) wires.splice(i, 1);
+      const w = wires[i];
+      const touches = (ep) => (ep.t === "lead" && ep.compId === compId) ||
+                              (ep.t === "hole" && String(ep.node).split(":")[0] === String(compId));
+      if (touches(w.a) || touches(w.b)) wires.splice(i, 1);
     }
-    const comp = Components.get(compId);
-    if (comp) comp.source = null;
+    resolve();
   }
 
-  /** מרכז אלמנט יחסית לקנבס */
-  function center(el) {
-    const r = el.getBoundingClientRect();
-    const c = canvasEl.getBoundingClientRect();
-    return { x: r.left - c.left + r.width / 2, y: r.top - c.top + r.height / 2 };
+  /* ---------- ציור ---------- */
+  function center(el) { const r = el.getBoundingClientRect(), c = canvasEl.getBoundingClientRect(); return { x: r.left - c.left + r.width / 2, y: r.top - c.top + r.height / 2 }; }
+  function elFor(ep) {
+    if (ep.t === "pin")  return canvasEl.querySelector(`.pin[data-port="${ep.port}"][data-bit="${ep.bit}"]`);
+    if (ep.t === "lead") return canvasEl.querySelector(`.lead[data-comp="${ep.compId}"][data-leg="${ep.leg}"]`);
+    if (ep.t === "hole") return canvasEl.querySelector(`.hole[data-hole="${ep.holeKey}"]`);
+  }
+  function wireHot(w) {
+    const sig = directSignal(w);
+    return sig ? Registers.getBit(sig.port, sig.bit) === 1 : false;
+  }
+  function directSignal(w) {
+    const pin = pick(w, "pin");
+    if (pin) return { port: pin.port, bit: pin.bit };
+    const lead = pick(w, "lead");
+    if (lead) { const c = Components.get(lead.compId); return c && c.conns[lead.leg]; }
+    return null;
   }
 
-  function pinEl(port, bit) {
-    return canvasEl.querySelector(`.pin[data-port="${port}"][data-bit="${bit}"]`);
-  }
-  function termEl(compId) {
-    return canvasEl.querySelector(`.terminal[data-comp="${compId}"]`);
-  }
-
-  /** ציור מחדש של כל החוטים (גם אחרי הזזת רכיב) */
   function redraw() {
     if (!svg) return;
-    // נקה הכל פרט לקו התצוגה המקדימה
-    [...svg.querySelectorAll("line.wire")].forEach((l) => l.remove());
-
-    // הסר חוטים שאיבדו קצה (רכיב נמחק)
-    for (let i = wires.length - 1; i >= 0; i--) {
-      if (!Components.get(wires[i].compId)) wires.splice(i, 1);
-    }
+    [...svg.querySelectorAll("line.wire:not(.preview)")].forEach((l) => l.remove());
+    // הסר חוטים שאיבדו קצה
+    for (let i = wires.length - 1; i >= 0; i--) { if (!elFor(wires[i].a) || !elFor(wires[i].b)) wires.splice(i, 1); }
 
     wires.forEach((w) => {
-      const p = pinEl(w.port, w.bit);
-      const t = termEl(w.compId);
-      if (!p || !t) return;
-      const a = center(p), b = center(t);
+      const ea = elFor(w.a), eb = elFor(w.b);
+      if (!ea || !eb) return;
+      const A = center(ea), B = center(eb);
       const line = document.createElementNS(SVGNS, "line");
       line.setAttribute("class", "wire");
-      line.setAttribute("x1", a.x); line.setAttribute("y1", a.y);
-      line.setAttribute("x2", b.x); line.setAttribute("y2", b.y);
-      const on = Registers.getBit(w.port, w.bit) === 1;
-      line.classList.toggle("hot", on);
+      line.setAttribute("x1", A.x); line.setAttribute("y1", A.y);
+      line.setAttribute("x2", B.x); line.setAttribute("y2", B.y);
+      line.classList.toggle("hot", wireHot(w));
       line.addEventListener("click", (e) => {
         e.stopPropagation();
-        removeWiresForComp(w.compId);
-        redraw();
-        const comp = Components.get(w.compId);
-        if (comp) Canvas.refresh(comp);
+        const idx = wires.indexOf(w);
+        if (idx >= 0) wires.splice(idx, 1);
+        resolve(); redraw();
       });
       svg.appendChild(line);
     });
   }
 
-  function onMouseMove(e) {
-    if (!pending) return;
-    const c = canvasEl.getBoundingClientRect();
-    const a = center(pending.el);
-    if (!preview) {
-      preview = document.createElementNS(SVGNS, "line");
-      preview.setAttribute("class", "wire preview");
-      svg.appendChild(preview);
-    }
-    preview.setAttribute("x1", a.x); preview.setAttribute("y1", a.y);
-    preview.setAttribute("x2", e.clientX - c.left);
-    preview.setAttribute("y2", e.clientY - c.top);
-  }
-
-  return { init, redraw, wires, serialize, clear, addWire };
+  return { init, redraw, resolve, wires, serialize, clear, load, removeWiresForComp };
 })();
