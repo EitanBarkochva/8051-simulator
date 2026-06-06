@@ -26,7 +26,7 @@ window.Auth = (function () {
   /** כניסה/הרשמה דרך חשבון Google (OAuth). הדפדפן יופנה ל-Google ובחזרה. */
   async function signInWithGoogle() {
     if (!DB.isSupabase) { location.href = "dashboard.html"; return { ok: true }; }
-    const redirectTo = location.href.split("#")[0].split("?")[0];  // חזרה לדף הכניסה
+    const redirectTo = new URL("dashboard.html", location.href).href;  // חזרה ישירה לדשבורד אחרי הכניסה
     const { error } = await DB.client.auth.signInWithOAuth({ provider: "google", options: { redirectTo } });
     if (error) return { error: error.message };
     return { ok: true };   // הדפדפן עומד לעבור ל-Google

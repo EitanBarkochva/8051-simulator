@@ -39,12 +39,16 @@ window.Canvas = (function () {
     el.innerHTML =
       comp.type === "mcu"        ? mcuMarkup(comp) :
       comp.type === "button"     ? buttonMarkup(comp) :
+      comp.type === "slideswitch"? slideSwitchMarkup(comp) :
       comp.type === "sevenseg"   ? sevenSegMarkup(comp) :
+      comp.type === "display"    ? displayMarkup(comp) :
+      comp.type === "resistor"   ? resistorMarkup(comp) :
       comp.type === "pot"        ? potMarkup(comp) :
       comp.type === "lightsensor"? lightSensorMarkup(comp) :
       comp.type === "motor"      ? motorMarkup(comp) :
       comp.type === "buzzer"     ? buzzerMarkup(comp) :
       comp.type === "breadboard" ? breadboardMarkup(comp) :
+      (comp.type === "battery15" || comp.type === "battery9") ? batteryMarkup(comp) :
                                    ledMarkup(comp);
 
     el.style.transform = `rotate(${comp.rotation || 0}deg)`;
@@ -52,6 +56,7 @@ window.Canvas = (function () {
     el.querySelector(".comp-del").addEventListener("click", () => {
       Components.remove(comp.id);
       el.remove();
+      if (window.Wiring && Wiring.removeWiresForComp) Wiring.removeWiresForComp(comp.id);
       if (onMove) onMove();      // נקה חוטים שהיו מחוברים אליו
       updateHint();
     });
@@ -71,9 +76,11 @@ window.Canvas = (function () {
     el.addEventListener("wheel", (e) => { e.preventDefault(); applyRotation(e.deltaY > 0 ? 10 : -10); }, { passive: false });
 
     if (comp.type === "button") enableButton(el, comp);
+    if (comp.type === "slideswitch") enableSlide(el, comp);
     if (comp.type === "pot") enablePot(el, comp);
     if (comp.type === "lightsensor") enableLight(el, comp);
     if (comp.type === "led") enableLedColors(el, comp);
+    if (comp.type === "resistor") enableResistor(el, comp);
 
     enableDrag(el, comp);
     canvasEl.appendChild(el);
@@ -108,6 +115,82 @@ window.Canvas = (function () {
       <div class="led-colors">
         ${LED_COLORS.map((c) => `<span class="swatch" data-color="${c}" style="background:${c}" title="${c}"></span>`).join("")}
       </div>`;
+  }
+
+  function displayMarkup(comp) {
+    // צג טקסט הנשלט מהקוד (printf/textSize/cursor) — ללא חיווט
+    return `
+      <div class="comp-head">
+        <span class="comp-title">${comp.def.name} #${comp.id}</span>
+        <button class="comp-del" title="מחק">✕</button>
+      </div>
+      <div class="lcd-bezel">
+        <canvas class="lcd-canvas" width="176" height="112"></canvas>
+      </div>`;
+  }
+
+  /* ---------- צג טקסט: printf / textSize / cursor / clear ---------- */
+  function firstDisplay() { return Components.items.find((c) => c.type === "display"); }
+  function dispState(comp) { return comp._disp || (comp._disp = { cx: 0, cy: 0, size: 1 }); }
+  function dispCtx(comp) {
+    const cv = comp && comp._el && comp._el.querySelector(".lcd-canvas");
+    return cv ? cv.getContext("2d") : null;
+  }
+  function dispClear(comp) {
+    const ctx = dispCtx(comp); if (!ctx) return;
+    ctx.fillStyle = "#06140a";
+    ctx.fillRect(0, 0, ctx.canvas.width, ctx.canvas.height);
+    const st = dispState(comp); st.cx = 0; st.cy = 0;
+  }
+  function dispPrint(comp, text) {
+    const ctx = dispCtx(comp); if (!ctx) return;
+    const st = dispState(comp);
+    const fs = 8 * st.size, lh = fs + 2;
+    ctx.textBaseline = "top";
+    ctx.font = `${fs}px "Consolas","Courier New",monospace`;
+    ctx.fillStyle = "#8CFFA0";
+    const W = ctx.canvas.width, H = ctx.canvas.height;
+    const str = String(text);
+    for (let k = 0; k < str.length; k++) {
+      const ch = str[k];
+      if (ch === "\n") { st.cx = 0; st.cy += lh; continue; }
+      const w = ctx.measureText(ch).width;
+      if (st.cx + w > W) { st.cx = 0; st.cy += lh; }      // גלישת שורה
+      if (st.cy + fs > H) {                                // גלילה כשמגיעים לתחתית
+        const img = ctx.getImageData(0, lh, W, H - lh);
+        ctx.fillStyle = "#06140a"; ctx.fillRect(0, 0, W, H);
+        ctx.putImageData(img, 0, 0);
+        st.cy -= lh;
+        ctx.fillStyle = "#8CFFA0";
+      }
+      ctx.fillText(ch, st.cx, st.cy);
+      st.cx += w;
+    }
+  }
+  // API פומבי לשימוש מהסימולטור (פועל על הצג הראשון שעל המשטח)
+  function displayPrint(text)  { const c = firstDisplay(); if (c) dispPrint(c, text); }
+  function displayTextSize(n)  { const c = firstDisplay(); if (c) dispState(c).size = Math.max(1, n | 0); }
+  function displayCursor(x, y) { const c = firstDisplay(); if (c) { const s = dispState(c); s.cx = x | 0; s.cy = y | 0; } }
+  function displayClear()      { const c = firstDisplay(); if (c) dispClear(c); }
+  function displayResetAll()   { Components.items.forEach((c) => { if (c.type === "display") { c._disp = { cx: 0, cy: 0, size: 1 }; dispClear(c); } }); }
+
+  function resistorMarkup(comp) {
+    return `
+      <div class="comp-head">
+        <span class="comp-title">${comp.def.name} #${comp.id}</span>
+        <button class="comp-del" title="מחק">✕</button>
+      </div>
+      <div class="res-row">
+        <span class="lead" data-comp="${comp.id}" data-leg="0"></span>
+        <div class="res-body" title="לחץ להחלפת ערך (גלגל = הבא/קודם)">
+          <span class="res-mark" title="טבעת ראשונה — קוראים מכאן">▸</span>
+          <span class="res-band b1"></span>
+          <span class="res-band b2"></span>
+          <span class="res-band b3"></span>
+        </div>
+        <span class="lead" data-comp="${comp.id}" data-leg="1"></span>
+      </div>
+      <div class="res-label">1kΩ</div>`;
   }
 
   function sevenSegMarkup(comp) {
@@ -217,6 +300,24 @@ window.Canvas = (function () {
       </div>`;
   }
 
+  function slideSwitchMarkup(comp) {
+    return `
+      <div class="comp-head">
+        <span class="comp-title">${comp.def.name} #${comp.id}</span>
+        <button class="comp-del" title="מחק">✕</button>
+      </div>
+      <div class="slide-body">
+        <div class="slide-track" title="לחץ כדי להזיז את המתג">
+          <div class="slide-knob"></div>
+        </div>
+      </div>
+      <div class="slide-legs">
+        <span class="lead" data-comp="${comp.id}" data-leg="0"></span>
+        <span class="lead" data-comp="${comp.id}" data-leg="1"></span>
+        <span class="lead" data-comp="${comp.id}" data-leg="2"></span>
+      </div>`;
+  }
+
   function buttonMarkup(comp) {
     return `
       <div class="comp-head">
@@ -224,9 +325,31 @@ window.Canvas = (function () {
         <button class="comp-del" title="מחק">✕</button>
       </div>
       <div class="btn-body">
-        <span class="btn-leg lead l" data-comp="${comp.id}" data-leg="0"></span>
-        <span class="btn-leg lead r" data-comp="${comp.id}" data-leg="1"></span>
+        <span class="btn-leg lead ll" data-comp="${comp.id}" data-leg="0" title="רגל שמאלית"></span>
+        <span class="btn-leg lead lr" data-comp="${comp.id}" data-leg="1" title="רגל ימנית"></span>
         <div class="btn-push" title="לחץ והחזק"></div>
+      </div>`;
+  }
+
+  function batteryMarkup(comp) {
+    const volts = comp.type === "battery9" ? "9V" : "1.5V";
+    return `
+      <div class="comp-head">
+        <span class="comp-title">${comp.def.name} #${comp.id}</span>
+        <button class="comp-del" title="מחק">✕</button>
+      </div>
+      <div class="batt-wrap">
+        <svg class="batt-svg" viewBox="0 0 72 56" width="68" height="52">
+          <line class="batt-term-wire" x1="16" y1="14" x2="16" y2="4"/>
+          <line class="batt-term-wire" x1="56" y1="14" x2="56" y2="4"/>
+          <rect class="batt-body" x="6" y="14" width="60" height="34" rx="4"/>
+          <rect class="batt-stripe" x="6" y="14" width="14" height="34" rx="4"/>
+          <text class="batt-label" x="40" y="35">${volts}</text>
+          <text class="batt-sign plus"  x="12" y="35">+</text>
+          <text class="batt-sign minus" x="58" y="34">−</text>
+          <circle class="pin batt-term plus"  data-port="VCC" data-bit="0" cx="16" cy="4" r="5"><title>+ (5V)</title></circle>
+          <circle class="pin batt-term minus" data-port="GND" data-bit="0" cx="56" cy="4" r="5"><title>− (GND)</title></circle>
+        </svg>
       </div>`;
   }
 
@@ -259,25 +382,61 @@ window.Canvas = (function () {
   }
 
   function mcuMarkup(comp) {
-    const side = (port) => [0,1,2,3,4,5,6,7].map((bit) =>
-      `<span class="pin" data-port="${port}" data-bit="${bit}" title="${port}.${bit}">${bit}</span>`
-    ).join("");
+    // pinout TQFP-48 (C8051F38x). port/bit = פין ניתן לחיווט; אחרת תצוגה בלבד
+    const TOP = [
+      {n:48,name:"P0.6",port:"P0",bit:6},{n:47,name:"P0.7",port:"P0",bit:7},
+      {n:46,name:"P1.0",port:"P1",bit:0},{n:45,name:"P1.1",port:"P1",bit:1},
+      {n:44,name:"P1.2",port:"P1",bit:2},{n:43,name:"P1.3",port:"P1",bit:3},
+      {n:42,name:"P1.4",port:"P1",bit:4},{n:41,name:"P1.5",port:"P1",bit:5},
+      {n:40,name:"P1.6",port:"P1",bit:6},{n:39,name:"P1.7",port:"P1",bit:7},
+      {n:38,name:"P2.0",port:"P2",bit:0},{n:37,name:"P2.1",port:"P2",bit:1},
+    ];
+    const LEFT = [
+      {n:1,name:"P0.5",port:"P0",bit:5},{n:2,name:"P0.4",port:"P0",bit:4},
+      {n:3,name:"P0.3",port:"P0",bit:3},{n:4,name:"P0.2",port:"P0",bit:2},
+      {n:5,name:"P0.1",port:"P0",bit:1},{n:6,name:"P0.0",port:"P0",bit:0},
+      {n:7,name:"GND",port:"GND",bit:0},{n:8,name:"D+"},{n:9,name:"D-"},
+      {n:10,name:"VDD",port:"VCC",bit:0},{n:11,name:"REGIN"},{n:12,name:"VBUS"},
+    ];
+    const BOTTOM = [
+      {n:13,name:"RST/C2CK"},{n:14,name:"C2D"},
+      {n:15,name:"P4.7"},{n:16,name:"P4.6"},{n:17,name:"P4.5"},{n:18,name:"P4.4"},
+      {n:19,name:"P4.3"},{n:20,name:"P4.2"},{n:21,name:"P4.1"},{n:22,name:"P4.0"},
+      {n:23,name:"P3.7",port:"P3",bit:7},{n:24,name:"P3.6",port:"P3",bit:6},
+    ];
+    const RIGHT = [
+      {n:36,name:"P2.2",port:"P2",bit:2},{n:35,name:"P2.3",port:"P2",bit:3},
+      {n:34,name:"P2.4",port:"P2",bit:4},{n:33,name:"P2.5",port:"P2",bit:5},
+      {n:32,name:"P2.6",port:"P2",bit:6},{n:31,name:"P2.7",port:"P2",bit:7},
+      {n:30,name:"P3.0",port:"P3",bit:0},{n:29,name:"P3.1",port:"P3",bit:1},
+      {n:28,name:"P3.2",port:"P3",bit:2},{n:27,name:"P3.3",port:"P3",bit:3},
+      {n:26,name:"P3.4",port:"P3",bit:4},{n:25,name:"P3.5",port:"P3",bit:5},
+    ];
+    const leg = (p, side) => {
+      const conn = !!p.port;
+      const cls = conn ? "pin leg-numbox" : "leg-numbox nc";
+      const attrs = conn ? `data-port="${p.port}" data-bit="${p.bit}"` : "";
+      const num = `<span class="${cls}" ${attrs} title="${p.name} (pin ${p.n})">${p.n}</span>`;
+      const name = `<span class="leg-name${conn ? "" : " nc"}">${p.name}</span>`;
+      const lead = `<span class="leg-lead"></span>`;
+      const inner = (side === "top" || side === "left") ? name + lead + num : num + lead + name;
+      return `<div class="leg ${side}">${inner}</div>`;
+    };
+    const sideHtml = (arr, side) => `<div class="mcu-side ${side}">${arr.map((p) => leg(p, side)).join("")}</div>`;
     return `
       <div class="comp-head">
         <span class="comp-title">${comp.def.name}</span>
         <button class="comp-del" title="מחק">✕</button>
       </div>
       <div class="mcu-chip">
-        <div class="mcu-side top">${side("P0")}</div>
-        <div class="mcu-side left">${side("P3")}</div>
+        ${sideHtml(TOP, "top")}
+        ${sideHtml(LEFT, "left")}
         <div class="mcu-body">
-          <span class="mcu-notch"></span>
+          <span class="mcu-dot"></span>
           <span class="mcu-name">8051</span>
-          <span class="mcu-lbl t">P0</span><span class="mcu-lbl r">P1</span>
-          <span class="mcu-lbl b">P2</span><span class="mcu-lbl l">P3</span>
         </div>
-        <div class="mcu-side right">${side("P1")}</div>
-        <div class="mcu-side bottom">${side("P2")}</div>
+        ${sideHtml(RIGHT, "right")}
+        ${sideHtml(BOTTOM, "bottom")}
       </div>`;
   }
 
@@ -302,6 +461,17 @@ window.Canvas = (function () {
     } else if (comp.type === "lightsensor") {
       const num = comp._el.querySelector(".ls-num");
       if (num) num.textContent = comp.value;
+    } else if (comp.type === "slideswitch") {
+      comp._el.querySelector(".slide-track").classList.toggle("on", comp.value === 1);
+    } else if (comp.type === "display") {
+      if (!comp._dispInit) { dispClear(comp); comp._dispInit = true; }   // אתחול הצג פעם אחת (רקע כהה)
+    } else if (comp.type === "resistor") {
+      const [d1, d2, m] = Components.resistorBands(comp.value);
+      const cols = Components.RES_COLORS;
+      comp._el.querySelector(".res-band.b1").style.background = cols[d1];
+      comp._el.querySelector(".res-band.b2").style.background = cols[d2];
+      comp._el.querySelector(".res-band.b3").style.background = cols[m];
+      comp._el.querySelector(".res-label").textContent = Components.resistorLabel(comp.value);
     } else if (comp.type === "buzzer") {
       comp._el.querySelector(".buzzer-icon").classList.toggle("ringing", Components.isActive(comp));
     } else if (comp.type === "motor") {
@@ -360,22 +530,59 @@ window.Canvas = (function () {
     slider.addEventListener("input", () => Components.setPotValue(comp, +slider.value));
   }
 
+  /** מפסק הזזה — לחיצה מזיזה את המתג ומחליפה 0/1 */
+  function enableSlide(el, comp) {
+    el.querySelector(".slide-track").addEventListener("click", (e) => {
+      e.stopPropagation();
+      comp.value = comp.value ? 0 : 1;
+      Components.assertInput(comp);
+      refresh(comp);
+    });
+  }
+
+  /** נגד — לחיצה על הגוף מחליפה ערך; גלגל מעלה/מוריד בערכים הסטנדרטיים */
+  function enableResistor(el, comp) {
+    const body = el.querySelector(".res-body");
+    body.addEventListener("click", (e) => {
+      e.stopPropagation();
+      Components.cycleResistor(comp, 1);
+      refresh(comp);
+    });
+    body.addEventListener("wheel", (e) => {
+      e.preventDefault(); e.stopPropagation();   // שלא יסובב את הרכיב
+      Components.cycleResistor(comp, e.deltaY > 0 ? 1 : -1);
+      refresh(comp);
+    }, { passive: false });
+  }
+
   /** סליידר חיישן אור (רמת אור 0-255) → מזין ערך אנלוגי לפורט */
   function enableLight(el, comp) {
     const slider = el.querySelector(".ls-slider");
     slider.addEventListener("input", () => Components.setPotValue(comp, +slider.value));
   }
 
-  /** גרירת רכיב בתוך הקנבס (לא על פקדים / פינים / טרמינלים) */
+  /** גרירת רכיב בתוך הקנבס.
+   * אפשר לגרור מכל מקום על הרכיב חוץ מנקודות חיווט (.pin/.lead/.hole),
+   * סליידרים, כפתור הלחיצה וכפתורי הכותרת. גרירה אמיתית (מעבר סף תזוזה)
+   * "בולעת" את ה-click שאחריה כדי שטוגלים/בחירת-ערך לא יופעלו אחרי הזזה. */
   function enableDrag(el, comp) {
     el.addEventListener("mousedown", (e) => {
-      if (e.target.closest("button, input, .pin, .lead, .hole, .btn-push, .swatch, .comp-rotate")) return;
-      e.preventDefault();
-      selectOnly(el);
+      if (e.button !== 0) return;
+      if (e.target.closest(".pin, .lead, .hole, .btn-push, input, .comp-del, .comp-rotate")) return;
+
+      const startX = e.clientX, startY = e.clientY;
       const offX = e.clientX - el.offsetLeft;
       const offY = e.clientY - el.offsetTop;
+      let moved = false;
 
       function move(ev) {
+        if (!moved) {
+          if (Math.hypot(ev.clientX - startX, ev.clientY - startY) < 4) return;  // סף תזוזה
+          moved = true;
+          selectOnly(el);
+          el.classList.add("dragging");
+        }
+        ev.preventDefault();
         comp.x = Math.max(0, ev.clientX - offX);
         comp.y = Math.max(0, ev.clientY - offY);
         el.style.left = comp.x + "px";
@@ -385,6 +592,13 @@ window.Canvas = (function () {
       function up() {
         document.removeEventListener("mousemove", move);
         document.removeEventListener("mouseup", up);
+        el.classList.remove("dragging");
+        if (moved) {
+          // בלע את ה-click הבא (אם יירה) כדי שלא יפעיל פקד אחרי גרירה
+          const swallow = (ce) => { ce.stopPropagation(); ce.preventDefault(); };
+          el.addEventListener("click", swallow, { capture: true, once: true });
+          setTimeout(() => el.removeEventListener("click", swallow, { capture: true }), 0);
+        }
       }
       document.addEventListener("mousemove", move);
       document.addEventListener("mouseup", up);
@@ -409,6 +623,7 @@ window.Canvas = (function () {
 
   return {
     init, renderComponent, refresh, refreshAll, clearComponents,
+    displayPrint, displayTextSize, displayCursor, displayClear, displayResetAll,
     get el() { return canvasEl; },
   };
 })();

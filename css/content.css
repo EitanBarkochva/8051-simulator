@@ -1,0 +1,110 @@
+/* ===== עמודי תוכן (שפת C, רגיסטרים, ראשי, תרגילים) ===== */
+.page { max-width: 920px; margin: 0 auto; padding: 30px 22px 80px; }
+.page-hero {
+  text-align: center; padding: 40px 20px 28px;
+}
+.page-hero h1 { font-size: 30px; margin-bottom: 10px; }
+.page-hero p { color: var(--text-dim); font-size: 16px; max-width: 620px; margin: 0 auto; line-height: 1.6; }
+
+.page h1 { font-size: 26px; margin-bottom: 6px; }
+.page > p.lead { color: var(--text-dim); font-size: 15px; line-height: 1.7; margin-bottom: 24px; }
+
+.page h2 {
+  font-size: 20px; margin: 34px 0 12px;
+  padding-bottom: 8px; border-bottom: 1px solid var(--border);
+  scroll-margin-top: 70px;
+}
+.page h3 { font-size: 16px; margin: 20px 0 8px; color: var(--accent); }
+.page p, .page li { line-height: 1.75; color: var(--text); }
+.page ul, .page ol { margin: 8px 22px 14px; }
+.page li { margin-bottom: 5px; }
+.page b, .page strong { color: #fff; }
+
+/* קוד */
+.page pre {
+  background: #0b1118; border: 1px solid var(--border);
+  border-radius: 8px; padding: 14px 16px; overflow-x: auto;
+  margin: 10px 0 16px; direction: ltr; text-align: left;
+}
+.page code {
+  font-family: var(--mono); font-size: 13.5px; color: #cfe3f5;
+}
+.page p code, .page li code, .page td code {
+  background: #0b1118; border: 1px solid var(--border);
+  border-radius: 4px; padding: 1px 6px; font-size: 13px; color: #8fd0ff;
+  direction: ltr; display: inline-block;
+}
+
+/* טבלאות */
+.tbl {
+  width: 100%; border-collapse: collapse; margin: 10px 0 18px;
+  font-size: 14px; background: var(--panel);
+  border: 1px solid var(--border); border-radius: 8px; overflow: hidden;
+}
+.tbl th, .tbl td {
+  border: 1px solid var(--border); padding: 8px 11px; text-align: right; vertical-align: top;
+}
+.tbl th { background: var(--panel-2); color: #fff; font-weight: 600; }
+.tbl td:first-child { white-space: nowrap; }
+.tbl .mono { font-family: var(--mono); color: #8fd0ff; direction: ltr; }
+
+/* כרטיס רגיסטר */
+.reg {
+  background: var(--panel); border: 1px solid var(--border);
+  border-radius: 12px; padding: 18px 20px; margin: 16px 0;
+  scroll-margin-top: 70px;
+}
+.reg-head { display: flex; align-items: baseline; gap: 12px; flex-wrap: wrap; margin-bottom: 4px; }
+.reg-head h3 { margin: 0; color: var(--text); font-size: 18px; }
+.reg-addr {
+  font-family: var(--mono); font-size: 12px; color: var(--ok);
+  background: rgba(52,211,153,.1); border: 1px solid rgba(52,211,153,.3);
+  border-radius: 5px; padding: 2px 8px;
+}
+.reg-tag {
+  font-size: 11px; color: var(--accent); background: rgba(61,169,252,.12);
+  border: 1px solid rgba(61,169,252,.3); border-radius: 5px; padding: 2px 8px;
+}
+.reg-desc { color: var(--text-dim); font-size: 14px; line-height: 1.65; margin-bottom: 10px; }
+
+/* תוכן עניינים צף / ניווט פנימי */
+.toc {
+  background: var(--panel); border: 1px solid var(--border);
+  border-radius: 10px; padding: 14px 18px; margin: 0 0 24px;
+}
+.toc h4 { font-size: 13px; color: var(--text-dim); margin-bottom: 8px; text-transform: uppercase; letter-spacing: .5px; }
+.toc-links { display: flex; flex-wrap: wrap; gap: 6px; }
+.toc-links a {
+  font-size: 13px; color: var(--accent); text-decoration: none;
+  border: 1px solid var(--border); border-radius: 6px; padding: 4px 10px;
+  font-family: var(--mono);
+}
+.toc-links a:hover { background: var(--panel-2); color: #fff; }
+
+/* placeholder ל"בקרוב" */
+.coming-soon {
+  text-align: center; padding: 70px 20px; color: var(--text-dim);
+  border: 1px dashed var(--border); border-radius: 14px; margin-top: 20px;
+}
+.coming-soon .big { font-size: 46px; margin-bottom: 14px; }
+.coming-soon h2 { border: none; font-size: 22px; color: var(--text); margin-bottom: 8px; }
+
+.note {
+  background: rgba(61,169,252,.08); border-right: 3px solid var(--accent);
+  border-radius: 6px; padding: 10px 14px; margin: 14px 0; font-size: 14px; line-height: 1.7;
+}
+.note b { color: var(--accent); }
+
+.cards-row {
+  display: grid; grid-template-columns: repeat(auto-fit, minmax(200px,1fr));
+  gap: 14px; margin-top: 26px;
+}
+.nav-card {
+  background: var(--panel); border: 1px solid var(--border); border-radius: 12px;
+  padding: 22px 18px; text-decoration: none; color: var(--text);
+  transition: border-color .15s, transform .1s; text-align: center;
+}
+.nav-card:hover { border-color: var(--accent); transform: translateY(-2px); }
+.nav-card .ic { font-size: 34px; display: block; margin-bottom: 10px; }
+.nav-card .ttl { font-weight: 600; font-size: 16px; }
+.nav-card .sub { color: var(--text-dim); font-size: 13px; margin-top: 4px; }

@@ -9,8 +9,25 @@ window.Wiring = (function () {
 
   const SVGNS = "http://www.w3.org/2000/svg";
   let canvasEl = null, svg = null, preview = null, drag = null;
-  const wires = [];      // { id, a, b }  — כל קצה: {t,...}
+  const wires = [];      // { id, a, b, color }  — כל קצה: {t,...}
   let seq = 0;
+  let activeColor = "#e23a3a";   // צבע החוט הנוכחי (שהמשתמש בחר)
+
+  function setColor(c) {
+    activeColor = c;
+    if (preview) preview.setAttribute("stroke", c);
+  }
+  function getColor() { return activeColor; }
+
+  /** מסלול חוט רציף ומעוגל (עקומת בזייה עם נפילה קלה כמו חוט אמיתי) */
+  function pathD(A, B) {
+    const dx = B.x - A.x, dy = B.y - A.y;
+    const dist = Math.hypot(dx, dy);
+    const sag = Math.min(dist * 0.18, 38);   // שקיעה עדינה
+    const c1x = A.x + dx * 0.4, c1y = A.y + sag;
+    const c2x = B.x - dx * 0.4, c2y = B.y + sag;
+    return `M ${A.x} ${A.y} C ${c1x} ${c1y}, ${c2x} ${c2y}, ${B.x} ${B.y}`;
+  }
 
   function init(el) {
     canvasEl = el;
@@ -49,15 +66,19 @@ window.Wiring = (function () {
   function onDragMove(e) {
     if (!drag) return;
     const c = canvasEl.getBoundingClientRect(), a = center(drag.el);
-    if (!preview) { preview = document.createElementNS(SVGNS, "line"); preview.setAttribute("class", "wire preview"); svg.appendChild(preview); }
-    preview.setAttribute("x1", a.x); preview.setAttribute("y1", a.y);
-    preview.setAttribute("x2", e.clientX - c.left); preview.setAttribute("y2", e.clientY - c.top);
+    if (!preview) {
+      preview = document.createElementNS(SVGNS, "path");
+      preview.setAttribute("class", "wire preview");
+      preview.setAttribute("stroke", activeColor);
+      svg.appendChild(preview);
+    }
+    preview.setAttribute("d", pathD(a, { x: e.clientX - c.left, y: e.clientY - c.top }));
   }
   function onDragUp(e) {
     if (!drag) return;
     const other = endpointFrom(document.elementFromPoint(e.clientX, e.clientY));
     if (other && other.el !== drag.el) {
-      wires.push({ id: ++seq, a: strip(drag), b: strip(other) });
+      wires.push({ id: ++seq, a: strip(drag), b: strip(other), color: activeColor });
       resolve(); redraw();
     }
     cancelDrag();
@@ -94,17 +115,17 @@ window.Wiring = (function () {
   const pick = (w, t) => (w.a.t === t ? w.a : w.b.t === t ? w.b : null);
 
   /* ---------- שמירה/טעינה ---------- */
-  function serialize() { return wires.map((w) => ({ a: w.a, b: w.b })); }
+  function serialize() { return wires.map((w) => ({ a: w.a, b: w.b, color: w.color })); }
   function clear() {
     wires.length = 0;
-    if (svg) [...svg.querySelectorAll("line.wire:not(.preview)")].forEach((l) => l.remove());
+    if (svg) [...svg.querySelectorAll(".wire:not(.preview)")].forEach((l) => l.remove());
   }
-  /** טעינה: תומך בפורמט החדש {a,b} ובישן {port,bit,compId,leg} */
+  /** טעינה: תומך בפורמט החדש {a,b,color} ובישן {port,bit,compId,leg} */
   function load(arr) {
     (arr || []).forEach((w) => {
-      if (w.a && w.b) wires.push({ id: ++seq, a: w.a, b: w.b });
+      if (w.a && w.b) wires.push({ id: ++seq, a: w.a, b: w.b, color: w.color || activeColor });
       else if (w.port != null && w.compId != null)
-        wires.push({ id: ++seq, a: { t: "pin", port: w.port, bit: w.bit }, b: { t: "lead", compId: w.compId, leg: w.leg || 0 } });
+        wires.push({ id: ++seq, a: { t: "pin", port: w.port, bit: w.bit }, b: { t: "lead", compId: w.compId, leg: w.leg || 0 }, color: activeColor });
     });
     resolve();
   }
@@ -140,7 +161,7 @@ window.Wiring = (function () {
 
   function redraw() {
     if (!svg) return;
-    [...svg.querySelectorAll("line.wire:not(.preview)")].forEach((l) => l.remove());
+    [...svg.querySelectorAll(".wire:not(.preview)")].forEach((l) => l.remove());
     // הסר חוטים שאיבדו קצה
     for (let i = wires.length - 1; i >= 0; i--) { if (!elFor(wires[i].a) || !elFor(wires[i].b)) wires.splice(i, 1); }
 
@@ -148,20 +169,30 @@ window.Wiring = (function () {
       const ea = elFor(w.a), eb = elFor(w.b);
       if (!ea || !eb) return;
       const A = center(ea), B = center(eb);
-      const line = document.createElementNS(SVGNS, "line");
-      line.setAttribute("class", "wire");
-      line.setAttribute("x1", A.x); line.setAttribute("y1", A.y);
-      line.setAttribute("x2", B.x); line.setAttribute("y2", B.y);
-      line.classList.toggle("hot", wireHot(w));
-      line.addEventListener("click", (e) => {
+      const color = w.color || activeColor;
+      const path = document.createElementNS(SVGNS, "path");
+      path.setAttribute("class", "wire");
+      path.setAttribute("d", pathD(A, B));
+      path.style.stroke = color;          // inline → צבע המשתמש תמיד גובר
+      path.style.color = color;           // לזוהר ה-hot (currentColor)
+      path.classList.toggle("hot", wireHot(w));
+      path.setAttribute("title", "קליק: צביעה בצבע הנבחר · קליק ימני: מחיקה");
+      // קליק שמאלי — צביעה מחדש בצבע הפעיל
+      path.addEventListener("click", (e) => {
         e.stopPropagation();
+        w.color = activeColor;
+        redraw();
+      });
+      // קליק ימני — מחיקת החוט
+      path.addEventListener("contextmenu", (e) => {
+        e.preventDefault(); e.stopPropagation();
         const idx = wires.indexOf(w);
         if (idx >= 0) wires.splice(idx, 1);
         resolve(); redraw();
       });
-      svg.appendChild(line);
+      svg.appendChild(path);
     });
   }
 
-  return { init, redraw, resolve, wires, serialize, clear, load, removeWiresForComp };
+  return { init, redraw, resolve, wires, serialize, clear, load, removeWiresForComp, setColor, getColor };
 })();

@@ -4,16 +4,21 @@
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>8051 Simulator — סביבת עבודה</title>
-  <link rel="stylesheet" href="../css/style.css">
-  <link rel="stylesheet" href="../css/simulator.css">
-  <link rel="stylesheet" href="../css/components.css">
+  <link rel="stylesheet" href="../css/style.css?v=20260608">
+  <link rel="stylesheet" href="../css/simulator.css?v=20260608">
+  <link rel="stylesheet" href="../css/components.css?v=20260608">
+  <!-- מניעת מטמון של הדפדפן כדי שעדכונים יוצגו מיד -->
+  <meta http-equiv="Cache-Control" content="no-cache, no-store, must-revalidate">
+  <meta http-equiv="Pragma" content="no-cache">
+  <meta http-equiv="Expires" content="0">
 </head>
 <body>
   <div class="sim-shell">
 
     <!-- ===== topbar ===== -->
     <header class="topbar">
-      <a class="title" href="dashboard.html" title="חזרה לפרויקטים">⚡ 8051 Simulator</a>
+      <a class="title" href="home.html" title="לדף הראשי">⚡ 8051 Simulator</a>
+      <a href="home.html" class="topnav-link" title="תפריט ראשי">🏠 ראשי</a>
       <input id="project-name" class="project-name" placeholder="שם הפרויקט" value="פרויקט חדש">
       <button id="btn-save" class="primary">💾 שמור</button>
       <span class="spacer"></span>
@@ -31,9 +36,21 @@
         <span class="pi-icon">🔘</span>
         <span class="pi-name">כפתור</span>
       </div>
+      <div class="palette-item" data-type="slideswitch">
+        <span class="pi-icon">🎚️</span>
+        <span class="pi-name">מפסק הזזה</span>
+      </div>
       <div class="palette-item" data-type="sevenseg">
         <span class="pi-icon">🔢</span>
         <span class="pi-name">7-Seg</span>
+      </div>
+      <div class="palette-item" data-type="display">
+        <span class="pi-icon">🖥️</span>
+        <span class="pi-name">מסך צבעוני</span>
+      </div>
+      <div class="palette-item" data-type="resistor">
+        <span class="pi-icon">🟫</span>
+        <span class="pi-name">נגד</span>
       </div>
       <div class="palette-item" data-type="motor">
         <span class="pi-icon">⚙️</span>
@@ -55,6 +72,32 @@
         <span class="pi-icon">🧰</span>
         <span class="pi-name">לוח ניסויים</span>
       </div>
+      <div class="palette-item" data-type="battery15">
+        <span class="pi-icon">🔋</span>
+        <span class="pi-name">סוללה 1.5V</span>
+      </div>
+      <div class="palette-item" data-type="battery9">
+        <span class="pi-icon">🔋</span>
+        <span class="pi-name">סוללה 9V</span>
+      </div>
+
+      <h3 class="wire-h">🎨 צבע חוט</h3>
+      <div class="wire-colors" id="wire-colors">
+        <button class="wire-swatch active" style="--c:#e23a3a" data-color="#e23a3a" title="אדום"></button>
+        <button class="wire-swatch" style="--c:#000000" data-color="#000000" title="שחור"></button>
+        <button class="wire-swatch" style="--c:#1f8a2e" data-color="#1f8a2e" title="ירוק"></button>
+        <button class="wire-swatch" style="--c:#2563eb" data-color="#2563eb" title="כחול"></button>
+        <button class="wire-swatch" style="--c:#f4b400" data-color="#f4b400" title="צהוב"></button>
+        <button class="wire-swatch" style="--c:#ff7a00" data-color="#ff7a00" title="כתום"></button>
+        <button class="wire-swatch" style="--c:#9c27b0" data-color="#9c27b0" title="סגול"></button>
+        <button class="wire-swatch" style="--c:#7a4a1e" data-color="#7a4a1e" title="חום"></button>
+        <button class="wire-swatch" style="--c:#9ca3af" data-color="#9ca3af" title="אפור"></button>
+        <button class="wire-swatch" style="--c:#ffffff" data-color="#ffffff" title="לבן"></button>
+        <label class="wire-swatch custom" title="צבע מותאם אישית">
+          <input type="color" id="wire-color-custom" value="#e23a3a">+
+        </label>
+      </div>
+      <div class="wire-hint">בחר צבע ואז מתח חוט · קליק על חוט קיים = צביעה מחדש · קליק ימני = מחיקה</div>
     </aside>
 
     <!-- ===== קנבס (מרכז) ===== -->
@@ -84,8 +127,20 @@
         <div id="console"></div>
       </div>
 
+      <div class="side-section">
+        <h3>טרמינל (UART)</h3>
+        <div id="uart-out" class="uart-out" title="פלט מהבקר (SBUF)"></div>
+        <div class="uart-in-row">
+          <input id="uart-in" placeholder="הקלד טקסט לשליחה לבקר…">
+          <button id="uart-send">שלח</button>
+        </div>
+      </div>
+
       <div class="side-section" style="flex:1; overflow-y:auto;">
-        <h3>רגיסטרים</h3>
+        <div class="reg-head">
+          <h3>רגיסטרים</h3>
+          <button id="btn-toggle-regs" class="reg-toggle" title="הצג/הסתר את כל הרגיסטרים">📋 הצג הכול</button>
+        </div>
         <div class="reg-grid" id="reg-grid"></div>
       </div>
     </aside>
@@ -93,15 +148,15 @@
   </div>
 
   <!-- ===== business logic ===== -->
-  <script src="../js/business/registers.js"></script>
-  <script src="../js/business/codeParser.js"></script>
-  <script src="../js/business/components.js"></script>
-  <script src="../js/business/simulator.js"></script>
-  <script src="../js/business/checker.js"></script>
+  <script src="../js/business/registers.js?v=20260608"></script>
+  <script src="../js/business/codeParser.js?v=20260608"></script>
+  <script src="../js/business/components.js?v=20260608"></script>
+  <script src="../js/business/simulator.js?v=20260608"></script>
+  <script src="../js/business/checker.js?v=20260608"></script>
   <!-- ===== UI ===== -->
-  <script src="../js/ui/canvas.js"></script>
-  <script src="../js/ui/wiring.js"></script>
-  <script src="../js/ui/dragDrop.js"></script>
+  <script src="../js/ui/canvas.js?v=20260608"></script>
+  <script src="../js/ui/wiring.js?v=20260608"></script>
+  <script src="../js/ui/dragDrop.js?v=20260608"></script>
   <!-- ===== db ===== -->
   <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
   <script src="../js/db/config.js"></script>
@@ -121,19 +176,36 @@
       const statusEl  = document.getElementById("status");
 
       // --- רינדור טבלת הרגיסטרים ---
+      let showAllRegs = false;       // האם מציגים את כל הרגיסטרים (לפי בקשת המשתמש)
+      let regPoll = null;            // טיימר רענון בזמן הצגת-הכול
+      let lastRegHtml = "";
+
+      function byteRow(name, val) {
+        const bits = [7,6,5,4,3,2,1,0].map((b) =>
+          `<span class="bit ${(val >> b) & 1 ? "high" : ""}">${(val >> b) & 1}</span>`).join("");
+        const hex = "0x" + (val & 0xFF).toString(16).toUpperCase().padStart(2, "0");
+        return `<div class="reg-row"><span class="reg-name">${name}</span><span class="bits">${bits}</span><span class="reg-hex">${hex}</span></div>`;
+      }
+      function bitRow(name, v) {
+        return `<div class="reg-row reg-bit"><span class="reg-name">${name}</span><span class="bit ${v ? "high" : ""}">${v ? 1 : 0}</span></div>`;
+      }
+
       function renderRegisters() {
-        regGrid.innerHTML = Registers.PORTS.map((name) => {
-          const val = Registers.get(name);
-          const bits = [7,6,5,4,3,2,1,0].map((b) =>
-            `<span class="bit ${(val >> b) & 1 ? "high" : ""}">${(val >> b) & 1}</span>`
-          ).join("");
-          const hex = "0x" + val.toString(16).toUpperCase().padStart(2, "0");
-          return `<div class="reg-row">
-                    <span class="reg-name">${name}</span>
-                    <span class="bits">${bits}</span>
-                    <span class="reg-hex">${hex}</span>
-                  </div>`;
-        }).join("");
+        let html = `<div class="reg-cat">פורטים (קלט/פלט)</div>`;
+        html += Registers.PORTS.map((n) => byteRow(n, Registers.get(n))).join("");
+
+        if (showAllRegs) {
+          const sfr = (window.Simulator && Simulator.getSFRs) ? Simulator.getSFRs() : {};
+          html += `<div class="reg-cat">ליבה</div>`;
+          html += ["ACC", "B", "PSW", "SP"].map((n) => byteRow(n, Registers.get(n))).join("");
+          if (window.CodeParser && CodeParser.SFR_BYTES) {
+            html += `<div class="reg-cat">SFR — בתים (טיימרים / פסיקות)</div>`;
+            html += [...CodeParser.SFR_BYTES].map((n) => byteRow(n, sfr[n] || 0)).join("");
+            html += `<div class="reg-cat">SFR — ביטים</div>`;
+            html += [...CodeParser.SFR_BITS].map((n) => bitRow(n, sfr[n] || 0)).join("");
+          }
+        }
+        if (html !== lastRegHtml) { regGrid.innerHTML = html; lastRegHtml = html; }
       }
 
       const editorEl  = document.getElementById("code-editor");
@@ -147,6 +219,33 @@
         onMove: () => Wiring.redraw(),
       });
       DragDrop.init(paletteEl, canvasEl);
+
+      // --- בורר צבע חוט ---
+      (function () {
+        const box = document.getElementById("wire-colors");
+        const custom = document.getElementById("wire-color-custom");
+        const setActive = (el) => {
+          box.querySelectorAll(".wire-swatch").forEach((s) => s.classList.remove("active"));
+          if (el) el.classList.add("active");
+        };
+        box.querySelectorAll(".wire-swatch[data-color]").forEach((sw) => {
+          sw.addEventListener("click", () => { Wiring.setColor(sw.dataset.color); setActive(sw); });
+        });
+        custom.addEventListener("input", () => { Wiring.setColor(custom.value); setActive(custom.closest(".wire-swatch")); });
+      })();
+
+      // --- כפתור "הצג את כל הרגיסטרים" (לפי בקשת המשתמש) ---
+      (function () {
+        const btn = document.getElementById("btn-toggle-regs");
+        btn.addEventListener("click", () => {
+          showAllRegs = !showAllRegs;
+          btn.textContent = showAllRegs ? "📋 פורטים בלבד" : "📋 הצג הכול";
+          btn.classList.toggle("on", showAllRegs);
+          renderRegisters();
+          if (regPoll) { clearInterval(regPoll); regPoll = null; }
+          if (showAllRegs) regPoll = setInterval(renderRegisters, 200);  // עדכון חי של ה-SFR בזמן ריצה
+        });
+      })();
 
       // --- שמירה/טעינה של המעגל ---
       function serializeCircuit() {
@@ -272,6 +371,8 @@
           case "running":
             btnRun.disabled = true; btnStop.disabled = false;
             consoleEl.innerHTML = "";
+            uartOut.textContent = "";          // נקה את הטרמינל בכל ריצה
+            if (Canvas.displayResetAll) Canvas.displayResetAll();   // נקה את צגי הטקסט
             statusEl.textContent = "▶ רץ…";
             break;
           case "done":
@@ -293,6 +394,22 @@
 
       btnRun.addEventListener("click", () => Simulator.run(editorEl.value, onStatus));
       btnStop.addEventListener("click", () => Simulator.stop());
+
+      // --- טרמינל UART ---
+      const uartOut = document.getElementById("uart-out");
+      const uartIn  = document.getElementById("uart-in");
+      Simulator.onSerialOut((byte) => {
+        uartOut.textContent += String.fromCharCode(byte);
+        uartOut.scrollTop = uartOut.scrollHeight;
+      });
+      function sendUart() {
+        const v = uartIn.value;
+        if (!v) return;
+        Simulator.serialInput(v);   // מזין לבקר; הקוד יקרא דרך SBUF כש-RI דולק
+        uartIn.value = "";
+      }
+      document.getElementById("uart-send").addEventListener("click", sendUart);
+      uartIn.addEventListener("keydown", (e) => { if (e.key === "Enter") sendUart(); });
 
       // --- איפוס ---
       document.getElementById("btn-reset").addEventListener("click", () => {

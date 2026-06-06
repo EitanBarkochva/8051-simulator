@@ -73,37 +73,63 @@ span.lead:hover, span.lead.wiring-active { background: var(--accent) !important;
 .swatch:hover { transform: scale(1.15); }
 .swatch.sel { outline: 2px solid var(--accent); outline-offset: 1px; }
 
-/* --- כפתור (מתג לחיץ: בסיס כסוף, כפתור שחור, רגליים בצדדים) --- */
+/* --- מתג לחיץ: גוף שחור, כפתור אדום, 2 רגליים נגדיות (שמאל/ימין) --- */
 .btn-body {
   position: relative;
   width: 52px; height: 52px;
-  margin: 6px auto 8px;
-  border-radius: 7px;
-  background: linear-gradient(160deg, #d6dadf, #aab0b6);
-  border: 1px solid #888e96;
-  box-shadow: inset 0 1px 1px rgba(255,255,255,.55), 0 1px 3px rgba(0,0,0,.3);
-  display: grid; place-items: center;
+  margin: 6px auto 10px;
+  border-radius: 5px;
+  background: #161616;
+  border: 1px solid #000;
+  box-shadow: 0 2px 4px rgba(0,0,0,.4), inset 0 1px 1px rgba(255,255,255,.08);
 }
-.btn-leg {
-  position: absolute; width: 13px; height: 6px;
+/* qualified ב-.btn-body כדי לגבור על span.lead{position:relative} */
+.btn-body .btn-leg {
+  position: absolute; display: block;
+  width: 13px; height: 6px; top: 50%; transform: translateY(-50%);
   background: linear-gradient(#c6cbd0, #969ca3);
   border: 1px solid #6b727b; border-radius: 2px;
 }
-.btn-leg.l { left: -11px; top: 50%; transform: translateY(-50%); }
-.btn-leg.r { right: -11px; top: 50%; transform: translateY(-50%); }
+.btn-body .btn-leg.ll { left: -12px; }
+.btn-body .btn-leg.lr { right: -12px; }
 .btn-push {
+  position: absolute; top: 50%; left: 50%;
+  transform: translate(-50%, -50%);
   width: 28px; height: 28px;
-  border-radius: 50%;
-  background: radial-gradient(circle at 38% 30%, #404040, #0b0b0b);
-  border: 1px solid #000;
-  box-shadow: 0 2px 3px rgba(0,0,0,.45), inset 0 1px 1px rgba(255,255,255,.12);
+  border-radius: 5px;
+  background: linear-gradient(160deg, #e74c3c, #b8281b);
+  border: 1px solid #7a1f17;
+  box-shadow: 0 2px 3px rgba(0,0,0,.5), inset 0 1px 1px rgba(255,255,255,.3);
   cursor: pointer;
-  transition: transform .05s;
+  transition: transform .05s, background .05s;
 }
 .btn-push.pressed {
-  transform: translateY(2px);
-  background: radial-gradient(circle at 38% 30%, #2a2a2a, #000);
+  transform: translate(-50%, -50%) translateY(2px);
+  background: linear-gradient(160deg, #c0392b, #8e2a20);
 }
+
+/* --- מפסק הזזה (slide switch) --- */
+.slide-body {
+  width: 80px; padding: 7px; margin: 4px auto 2px;
+  background: linear-gradient(#9aa0a6, #6b727b);
+  border: 1px solid #565c63; border-radius: 6px;
+  box-shadow: inset 0 1px 1px rgba(255,255,255,.3), 0 1px 3px rgba(0,0,0,.3);
+}
+.slide-track {
+  position: relative; height: 28px;
+  background: #1b1e22; border: 1px solid #000; border-radius: 4px;
+  cursor: pointer; overflow: hidden;
+}
+.slide-knob {
+  position: absolute; top: 3px; left: 3px;
+  width: 30px; height: 20px; border-radius: 3px;
+  background: repeating-linear-gradient(90deg, #c2c7cc 0 2px, #8e949b 2px 5px);
+  border: 1px solid #565c63;
+  transition: left .12s;
+}
+.slide-track.on .slide-knob { left: calc(100% - 33px); }
+.slide-legs { display: flex; justify-content: space-evenly; padding: 0 14px; }
+.slide-legs .lead { width: 4px; height: 12px; background: #b6bcc4; border: 1px solid #6b727b; border-radius: 2px; }
 
 /* --- תצוגת 7-segment (גוף פחם, מקטעים משופעים) --- */
 .seven-seg {
@@ -121,6 +147,51 @@ span.lead:hover, span.lead.wiring-active { background: var(--accent) !important;
   fill: #ff3b3b;            /* מקטע דולק = אדום */
   filter: drop-shadow(0 0 3px #ff3b3b);
 }
+
+/* --- מסך טקסט (LCD) --- */
+.lcd-bezel {
+  width: max-content; padding: 7px; margin: 2px auto;
+  background: linear-gradient(#222, #0d0d0d);
+  border: 1px solid #000; border-radius: 8px;
+  box-shadow: 0 2px 6px rgba(0,0,0,.45), inset 0 1px 1px rgba(255,255,255,.08);
+  direction: ltr;
+}
+.lcd-screen {
+  height: 66px; border-radius: 3px;
+  display: flex; flex-direction: column; align-items: center; justify-content: center;
+  background: linear-gradient(135deg, hsl(0,85%,55%), hsl(50,85%,42%));
+  box-shadow: inset 0 0 10px rgba(0,0,0,.45);
+  transition: background .12s;
+}
+.lcd-val { font-family: var(--mono); font-size: 24px; font-weight: 700; color: #fff; text-shadow: 0 1px 3px rgba(0,0,0,.7); line-height: 1; }
+.lcd-hex { font-family: var(--mono); font-size: 10px; color: rgba(255,255,255,.9); text-shadow: 0 1px 2px rgba(0,0,0,.7); margin-top: 3px; }
+.lcd-legs { display: flex; justify-content: center; gap: 20px; margin-top: 3px; }
+.lcd-legs .lead { width: 4px; height: 12px; background: #b6bcc4; border: 1px solid #6b727b; border-radius: 2px; }
+/* צג טקסט (canvas) — נשלט מהקוד עם printf/textSize/cursor */
+.lcd-canvas { display: block; border-radius: 3px; background: #06140a; box-shadow: inset 0 0 10px rgba(0,0,0,.5); }
+
+/* --- נגד (קוד צבעים, 3 טבעות) --- */
+.res-row { display: flex; align-items: center; justify-content: center; margin: 12px auto 4px; direction: ltr; }
+.res-row .lead { width: 18px; height: 4px; background: #9aa0a8; border-radius: 2px; }
+.res-body {
+  position: relative;
+  width: 80px; height: 28px;
+  background: linear-gradient(#eccfa3, #d4a96d);
+  border-radius: 14px;
+  box-shadow: inset 0 2px 3px rgba(255,255,255,.45), inset 0 -3px 4px rgba(0,0,0,.22), 0 1px 2px rgba(0,0,0,.3);
+  cursor: pointer;
+  display: flex; align-items: center; gap: 6px;
+  padding-left: 13px;            /* הטבעות מקובצות לצד שמאל = הצד המסומן (קוראים מכאן) */
+  overflow: visible;
+}
+.res-body:hover { filter: brightness(1.04); }
+.res-band { width: 6px; height: 28px; background: #000; box-shadow: 0 0 1px rgba(0,0,0,.4); }
+.res-mark {
+  position: absolute; top: -14px; left: 9px;
+  color: #e53935; font-size: 14px; font-weight: 700; line-height: 1;
+  transform: rotate(90deg);      /* חץ אדום מצביע כלפי מטה אל הטבעת הראשונה */
+}
+.res-label { text-align: center; font-family: var(--mono); font-size: 12px; font-weight: 700; color: #333; margin-top: 2px; }
 
 /* --- מנוע (פלט אנלוגי) --- */
 .motor-wrap { position: relative; width: 54px; height: 54px; margin: 4px auto 14px; }
@@ -195,47 +266,68 @@ span.lead:hover, span.lead.wiring-active { background: var(--accent) !important;
 }
 .terminal:hover { background: var(--accent); }
 
-/* --- שבב 8051 (מלבני עם רגליים מסביב) --- */
-.mcu-chip { position: relative; width: 214px; height: 214px; margin: 2px; }
+/* --- שבב 8051 — דיאגרמת pinout (TQFP-48) --- */
+.mcu-chip { position: relative; direction: ltr; width: 296px; height: 320px; margin: 2px; font-family: var(--mono); }
 .mcu-body {
-  position: absolute; inset: 26px;
-  background: linear-gradient(150deg, #2b3038, #14171c);
-  border: 1px solid #0a0c10; border-radius: 9px;
+  position: absolute; left: 60px; top: 72px; width: 176px; height: 176px;
+  background: #f3f5f7; border: 2px solid #9aa1a8; border-radius: 10px;
   display: grid; place-items: center;
-  box-shadow: inset 0 1px 0 rgba(255,255,255,.05), 0 2px 5px rgba(0,0,0,.4);
 }
-.mcu-name { color: #aeb6bf; font-family: var(--mono); font-weight: 700; font-size: 18px; letter-spacing: 1px; }
-.mcu-notch {
-  position: absolute; top: -1px; left: 50%; transform: translate(-50%, -50%);
-  width: 16px; height: 16px; border-radius: 50%;
-  background: #0c0e12; border: 1px solid #2a333c;
-}
-.mcu-lbl { position: absolute; font-family: var(--mono); font-size: 10px; color: var(--accent); }
-.mcu-lbl.t { top: 4px;  left: 50%; transform: translateX(-50%); }
-.mcu-lbl.b { bottom: 4px; left: 50%; transform: translateX(-50%); }
-.mcu-lbl.l { left: 4px;  top: 50%; transform: translateY(-50%) rotate(-90deg); }
-.mcu-lbl.r { right: 4px; top: 50%; transform: translateY(-50%) rotate(90deg); }
+.mcu-name { color: #2b3038; font-weight: 700; font-size: 20px; letter-spacing: 1px; }
+.mcu-dot { position: absolute; top: 12px; left: 12px; width: 13px; height: 13px; border: 2px solid #9aa1a8; border-radius: 50%; }
 
-/* רצועות הרגליים סביב הגוף */
 .mcu-side { position: absolute; display: flex; }
-.mcu-side.top    { top: 0;    left: 26px; right: 26px; height: 26px; flex-direction: row;    justify-content: space-around; align-items: flex-start; }
-.mcu-side.bottom { bottom: 0; left: 26px; right: 26px; height: 26px; flex-direction: row;    justify-content: space-around; align-items: flex-end; }
-.mcu-side.left   { left: 0;   top: 26px; bottom: 26px; width: 26px;  flex-direction: column; justify-content: space-around; align-items: flex-start; }
-.mcu-side.right  { right: 0;  top: 26px; bottom: 26px; width: 26px;  flex-direction: column; justify-content: space-around; align-items: flex-end; }
+.mcu-side.top    { top: 0;    left: 60px; width: 176px; height: 72px; flex-direction: row;    justify-content: space-between; }
+.mcu-side.bottom { bottom: 0; left: 60px; width: 176px; height: 72px; flex-direction: row;    justify-content: space-between; }
+.mcu-side.left   { left: 0;   top: 72px; width: 60px;  height: 176px; flex-direction: column; justify-content: space-between; }
+.mcu-side.right  { right: 0;  top: 72px; width: 60px;  height: 176px; flex-direction: column; justify-content: space-between; }
 
-/* רגל = pad מתכתי לחיץ עם מספר הביט */
-.pin {
-  width: 15px; height: 15px;
-  display: grid; place-items: center;
-  border-radius: 3px;
-  background: linear-gradient(180deg, #5a6573, #3c454f);
-  border: 1px solid #232a31;
-  color: #cfd6dd;
-  font-family: var(--mono); font-size: 9px; font-weight: 700;
-  cursor: crosshair;
+.leg { display: flex; align-items: center; }
+.leg.top, .leg.bottom { flex-direction: column; width: 13px; height: 100%; }
+.leg.left, .leg.right { flex-direction: row; height: 13px; width: 100%; }
+.leg.top    { justify-content: flex-end; }
+.leg.bottom { justify-content: flex-start; }
+.leg.left   { justify-content: flex-end; }
+.leg.right  { justify-content: flex-start; }
+
+.leg-lead { background: #b0b6bc; flex: none; }
+.leg.top .leg-lead, .leg.bottom .leg-lead { width: 3px; height: 7px; }
+.leg.left .leg-lead, .leg.right .leg-lead { width: 7px; height: 3px; }
+
+.leg-numbox {
+  display: grid; place-items: center; flex: none;
+  min-width: 15px; height: 12px; padding: 0 2px;
+  background: #fff; border: 1px solid #9aa1a8; border-radius: 2px;
+  color: #333; font-size: 8px; box-sizing: border-box;
 }
-.pin:hover { background: var(--accent); color: #0c1118; }
-.pin.wiring-active { background: var(--ok) !important; color: #0c1118; }
+.pin.leg-numbox { cursor: crosshair; }
+.pin.leg-numbox:hover { background: var(--accent); color: #fff; border-color: var(--accent); }
+.pin.leg-numbox.wiring-active { background: var(--ok); border-color: var(--ok); color: #fff; }
+.leg-numbox.nc { color: #b0b6bc; }
+
+.leg-name { font-size: 8px; color: #2b3038; white-space: nowrap; flex: none; }
+.leg-name.nc { color: #9aa1a8; }
+.leg.top .leg-name, .leg.bottom .leg-name { writing-mode: vertical-rl; transform: rotate(180deg); line-height: 1; }
+.leg.left .leg-name  { margin-right: 2px; }
+.leg.right .leg-name { margin-left: 2px; }
+
+/* פיני SVG (הדקי סוללה) */
+circle.pin { fill: #cfd6dd; stroke: #2a333c; stroke-width: 1; cursor: crosshair; transition: fill .1s; }
+circle.pin:hover { fill: var(--accent); }
+circle.pin.wiring-active { fill: var(--ok); }
+circle.batt-term.plus  { fill: #e74c3c; }
+circle.batt-term.minus { fill: #2563eb; }
+
+/* --- סוללה (מקור מתח) --- */
+.batt-wrap { display: flex; justify-content: center; margin: 2px auto 4px; }
+.batt-svg { display: block; overflow: visible; }
+.batt-body { fill: #2b3038; stroke: #14171c; stroke-width: 1; }
+.batt-stripe { fill: #c0392b; }
+.batt-label { fill: #fff; font-family: var(--mono); font-weight: 700; font-size: 13px; text-anchor: middle; }
+.batt-sign { font-family: var(--mono); font-weight: 700; font-size: 12px; text-anchor: middle; }
+.batt-sign.plus { fill: #fff; }
+.batt-sign.minus { fill: #cfd6dd; }
+.batt-term-wire { stroke: #9aa1a8; stroke-width: 2.4; stroke-linecap: round; }
 
 /* קצה שנבחר וממתין להשלמת חוט */
 .wiring-active { outline: 2px solid var(--ok) !important; }
@@ -275,16 +367,20 @@ span.lead:hover, span.lead.wiring-active { background: var(--accent) !important;
   pointer-events: none;       /* לא חוסם גרירה */
   z-index: 1;
 }
-.wires line.wire {
+.wires path.wire {
+  fill: none;
   stroke: var(--pin-low);
-  stroke-width: 3;
+  stroke-width: 3.5;
   stroke-linecap: round;
-  pointer-events: stroke;     /* ניתן ללחוץ למחיקה */
+  pointer-events: stroke;     /* ניתן ללחוץ */
   cursor: pointer;
+  transition: stroke-width .1s, filter .1s;
 }
-.wires line.wire:hover { stroke: var(--err); }
-.wires line.wire.hot { stroke: var(--pin-high); }
-.wires line.preview {
-  stroke: var(--accent); stroke-width: 2;
-  stroke-dasharray: 5 4; pointer-events: none;
+.wires path.wire:hover { stroke-width: 5.5; filter: brightness(1.25); }
+/* חוט "חם" (אות '1') — זוהר בצבע של החוט עצמו, בלי לשנות את הצבע שהמשתמש בחר */
+.wires path.wire.hot { filter: drop-shadow(0 0 5px currentColor) brightness(1.4); stroke-width: 4.5; }
+.wires path.preview {
+  fill: none;
+  stroke: var(--accent); stroke-width: 3;
+  stroke-dasharray: 6 5; pointer-events: none; opacity: .8;
 }

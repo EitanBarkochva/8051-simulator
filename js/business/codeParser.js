@@ -21,8 +21,12 @@ window.CodeParser = (function () {
   const OPS2 = ["==","!=","<=",">=","&&","||","<<",">>","++","--","+=","-=","*=","/=","%=","&=","|=","^="];
 
   // רגיסטרים מיוחדים (SFR) שהמפרש מזהה כשמות
-  const SFR_BITS  = new Set(["EA","EX0","ET0","EX1","ET1","ES","TR0","TR1","IT0","IT1","TF0","TF1","IE0","IE1"]);
-  const SFR_BYTES = new Set(["TH0","TL0","TH1","TL1","TMOD","TCON","IE","IP"]);
+  const SFR_BITS  = new Set(["EA","EX0","ET0","EX1","ET1","ES","ES0","TR0","TR1","IT0","IT1","TF0","TF1","IE0","IE1",
+                             "AD0EN","AD0BUSY","AD0INT","AD0WINT","AD0TM",                   // ביטי ADC
+                             "TI","RI","REN","TB8","RB8","SM0","SM1","TI0","RI0","REN0"]);   // ביטי UART
+  const SFR_BYTES = new Set(["TH0","TL0","TH1","TL1","TMOD","TCON","IE","IP",
+                             "ADC0CN","ADC0H","ADC0L","ADC0CF","AMX0P",                      // בתי ADC
+                             "SCON","SBUF","SCON0","SBUF0"]);                                // בתי UART
   const SFR = new Set([...SFR_BITS, ...SFR_BYTES]);
 
   function lex(src) {
@@ -51,6 +55,36 @@ window.CodeParser = (function () {
         else if (c === "0" && (peek(1) === "b" || peek(1) === "B")) { j = i + 2; while (/[01]/.test(src[j])) j++; }
         else { while (/[0-9]/.test(src[j])) j++; }
         toks.push({ t: "num", v: parseNum(src.slice(i, j)), line });
+        i = j; continue;
+      }
+
+      // תו בודד: 'A' → קוד ASCII (כולל escapes כמו '\n')
+      if (c === "'") {
+        let j = i + 1, code;
+        if (src[j] === "\\") {
+          const map = { n: 10, t: 9, r: 13, "0": 0, "\\": 92, "'": 39, '"': 34, b: 8, f: 12 };
+          const e = src[j + 1];
+          code = (e in map) ? map[e] : (e || "").charCodeAt(0);
+          j += 2;
+        } else { code = src.charCodeAt(j); j += 1; }
+        if (src[j] !== "'") throw err(line, "תו לא תקין — חסר גרש סוגר '");
+        j += 1;
+        toks.push({ t: "num", v: code & 0xFF, line });
+        i = j; continue;
+      }
+
+      // מחרוזת: "..." → טוקן str (כולל escapes)
+      if (c === '"') {
+        let j = i + 1, s = "";
+        const map = { n: "\n", t: "\t", r: "\r", "0": "\0", "\\": "\\", '"': '"', "'": "'" };
+        while (j < src.length && src[j] !== '"') {
+          if (src[j] === "\n") line++;
+          if (src[j] === "\\") { const e = src[j + 1]; s += (e in map) ? map[e] : (e || ""); j += 2; }
+          else { s += src[j]; j++; }
+        }
+        if (src[j] !== '"') throw err(line, 'מחרוזת לא נסגרה — חסר גרשיים "');
+        j++;
+        toks.push({ t: "str", v: s, line });
         i = j; continue;
       }
 
@@ -94,6 +128,10 @@ window.CodeParser = (function () {
     const isOp = (v) => peek().t === "op" && peek().v === v;
     const isPunc = (v) => peek().t === "punc" && peek().v === v;
     const isKw = (v) => peek().t === "ident" && peek().v === v;
+    // מילות-טיפוס נתמכות (כולל צירופים כמו "unsigned int" / "unsigned char")
+    const TYPE_KW = new Set(["int", "char", "unsigned", "signed", "long", "short", "float", "double", "bit"]);
+    const isTypeKw = () => peek().t === "ident" && TYPE_KW.has(peek().v);
+    const isRetType = (tok) => tok && tok.t === "ident" && (tok.v === "void" || TYPE_KW.has(tok.v));
 
     function expectPunc(v) { if (!isPunc(v)) throw err(peek().line, `ציפיתי ל-"${v}"`); next(); }
     function expectOp(v)   { if (!isOp(v))   throw err(peek().line, `ציפיתי ל-"${v}"`); next(); }
@@ -108,8 +146,9 @@ window.CodeParser = (function () {
     }
 
     function parseStatement() {
+      if (isPunc(";")) { next(); return { type: "block", body: [] }; }   // פקודה ריקה: while(cond);
       if (isPunc("{")) return parseBlock();
-      if (isKw("int")) return parseDecl();
+      if (isTypeKw()) return parseDecl();
       if (isKw("if")) return parseIf();
       if (isKw("while")) return parseWhile();
       if (isKw("for")) return parseFor();
@@ -123,7 +162,8 @@ window.CodeParser = (function () {
     }
 
     function parseDecl() {
-      const line = next().line;            // 'int'
+      const line = peek().line;
+      while (isTypeKw()) next();            // צרוך מילות-טיפוס: int / unsigned int / unsigned char / long ...
       if (peek().t !== "ident") throw err(peek().line, "ציפיתי לשם משתנה");
       const name = next().v;
       // מערך: int t[] = {..}  /  int t[5];
@@ -259,6 +299,7 @@ window.CodeParser = (function () {
     function parsePrimary() {
       const tk = peek();
       if (tk.t === "num") { next(); return { type: "num", value: tk.v }; }
+      if (tk.t === "str") { next(); return { type: "str", value: tk.v }; }
       if (isPunc("(")) { next(); const e = parseExpr(); expectPunc(")"); return e; }
       if (tk.t === "ident") {
         const name = next().v;
@@ -281,19 +322,21 @@ window.CodeParser = (function () {
       throw err(tk.line, `ביטוי לא צפוי "${tk.v}"`);
     }
 
-    // הגדרת פונקציה: void/int NAME ( ... ) [interrupt N] { ... }
+    // הגדרת פונקציה: TYPE NAME ( ... ) [interrupt N] { ... }   (TYPE = void / int / unsigned char ...)
     function looksLikeFunc() {
-      const t0 = toks[p], t1 = toks[p + 1], t2 = toks[p + 2];
-      return t0 && t0.t === "ident" && (t0.v === "void" || t0.v === "int") &&
-             t1 && t1.t === "ident" && t2 && t2.t === "punc" && t2.v === "(";
+      if (!isRetType(toks[p])) return false;
+      let i = p;
+      while (isRetType(toks[i])) i++;       // דלג על מילות טיפוס ההחזרה (ייתכנו כמה)
+      return toks[i] && toks[i].t === "ident" && toks[i + 1] && toks[i + 1].t === "punc" && toks[i + 1].v === "(";
     }
     function parseFunction() {
-      const line = next().line;          // טיפוס החזרה (void/int)
-      const name = next().v;             // שם הפונקציה
+      const line = peek().line;
+      while (isRetType(peek())) next();      // צרוך את טיפוס ההחזרה (void / unsigned char ...)
+      const name = next().v;                 // שם הפונקציה
       expectPunc("(");
-      const params = [];                 // שמות פרמטרים: (int a, int b)
+      const params = [];                     // שמות פרמטרים: (unsigned char a, int b)
       while (!isPunc(")") && !atEnd()) {
-        if (isKw("int") || isKw("void") || isKw("char")) next();   // טיפוס הפרמטר
+        while (isTypeKw() || isKw("void")) next();   // טיפוס הפרמטר (ייתכנו כמה מילים)
         if (peek().t === "ident") params.push(next().v);
         if (isPunc(",")) next();
         else break;
@@ -407,5 +450,5 @@ window.CodeParser = (function () {
     }
   }
 
-  return { compile, lex, parseProgram, SFR_BITS };
+  return { compile, lex, parseProgram, SFR_BITS, SFR_BYTES };
 })();

@@ -2,10 +2,51 @@
 <html lang="he" dir="rtl">
 <head>
   <meta charset="UTF-8">
-  <meta http-equiv="refresh" content="0; url=pages/login.html">
-  <title>8051 Simulator</title>
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>סימולטור 8051</title>
+  <style>
+    body { font-family: "Segoe UI", system-ui, sans-serif; background: #0f1620; color: #e6edf3;
+           display: grid; place-items: center; min-height: 100vh; margin: 0; }
+    .box { text-align: center; }
+    .spin { width: 34px; height: 34px; margin: 0 auto 14px; border: 3px solid #2c3e52;
+            border-top-color: #3da9fc; border-radius: 50%; animation: r 0.8s linear infinite; }
+    @keyframes r { to { transform: rotate(360deg); } }
+    a { color: #3da9fc; }
+  </style>
 </head>
 <body>
-  <p>מעביר… <a href="pages/login.html">לחץ כאן אם לא הועברת</a></p>
+  <div class="box">
+    <div class="spin"></div>
+    <p>מעביר… <a href="pages/home.html">לחץ כאן אם לא הועברת</a></p>
+  </div>
+
+  <!-- Supabase: כדי לקלוט את ה-token שחוזר מ-Google OAuth אל דף השורש -->
+  <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+  <script src="js/db/config.js"></script>
+  <script src="js/db/db.js"></script>
+  <script>
+    (async function () {
+      const go = (p) => location.replace(p);
+
+      // אם אין Supabase (מצב מקומי / CDN חסום) — פשוט לדף הבית
+      if (!(window.DB && DB.isSupabase)) { go("pages/home.html"); return; }
+
+      const cameFromOAuth = location.hash.includes("access_token") || location.search.includes("error");
+
+      try {
+        // supabase-js קולט אוטומטית את ה-token מה-hash; getSession ממתין לאתחול
+        const { data } = await DB.client.auth.getSession();
+        if (data && data.session) { go("pages/dashboard.html"); return; }
+      } catch (e) { /* נופלים ל-fallback למטה */ }
+
+      if (cameFromOAuth) {
+        // רשת ביטחון: נחכה לאירוע התחברות, ואם לא הגיע — לדף הבית
+        DB.client.auth.onAuthStateChange((_e, session) => { if (session) go("pages/dashboard.html"); });
+        setTimeout(() => go("pages/home.html"), 2000);
+        return;
+      }
+      go("pages/home.html");
+    })();
+  </script>
 </body>
 </html>

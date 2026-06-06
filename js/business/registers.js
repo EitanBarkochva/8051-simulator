@@ -13,8 +13,12 @@ window.Registers = (function () {
   const PORTS = ["P0", "P1", "P2", "P3"];
   const listeners = [];
 
+  // VCC=5V קבוע גבוה (0xFF), GND קבוע נמוך (0x00) — מקורות מתח, לא ניתנים לשינוי
+  const POWER = { VCC: 0xFF, GND: 0x00 };
+
   /** קבע ערך שלם (0-255) לפורט/רגיסטר */
   function setPort(name, value) {
+    if (name in POWER) return false;           // מקור מתח קבוע
     if (!(name in state)) return false;
     state[name] = value & 0xFF;
     emit(name, state[name]);
@@ -23,6 +27,7 @@ window.Registers = (function () {
 
   /** קבע ביט בודד (0/1) בתוך פורט */
   function setBit(name, bit, on) {
+    if (name in POWER) return false;
     if (!(name in state)) return false;
     const mask = 1 << bit;
     state[name] = on ? (state[name] | mask) : (state[name] & ~mask);
@@ -30,8 +35,8 @@ window.Registers = (function () {
     return true;
   }
 
-  function get(name)         { return state[name]; }
-  function getBit(name, bit) { return (state[name] >> bit) & 1; }
+  function get(name)         { return name in POWER ? POWER[name] : state[name]; }
+  function getBit(name, bit) { return name in POWER ? (POWER[name] >> bit) & 1 : (state[name] >> bit) & 1; }
 
   /** הירשם לשינויים: fn(name, value) */
   function onChange(fn) { listeners.push(fn); }

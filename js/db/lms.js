@@ -76,6 +76,21 @@ window.LMS = (function () {
       if (error) throw error;
       return data;   // class id
     },
+    /** המורה מוסיף תלמיד לכיתתו לפי אימייל (דרך RPC מאובטח) */
+    async addStudent(classId, email) {
+      guard();
+      const { data, error } = await sb().rpc("add_student_to_class", { p_class_id: classId, p_email: email });
+      if (error) throw error;
+      const row = Array.isArray(data) ? data[0] : data;
+      return row ? { id: row.id, name: row.full_name || "(ללא שם)", email: row.email } : null;
+    },
+    /** המורה מסיר תלמיד מהכיתה */
+    async removeStudent(classId, studentId) {
+      guard();
+      const { error } = await sb().from("class_members")
+        .delete().eq("class_id", classId).eq("student_id", studentId);
+      if (error) throw error;
+    },
   };
 
   /* ---------- מטלות ---------- */

@@ -46,3 +46,30 @@ button.primary {
 button.primary:hover { background: var(--accent); }
 
 h1, h2, h3 { font-weight: 600; }
+
+/* ===== תפריט ראשי (נווט עליון) ===== */
+.site-nav {
+  display: flex; align-items: center; gap: 14px;
+  padding: 0 22px; height: 58px;
+  background: var(--panel);
+  border-bottom: 1px solid var(--border);
+  position: sticky; top: 0; z-index: 100;
+}
+.site-brand {
+  color: var(--text); text-decoration: none;
+  font-weight: 700; font-size: 17px;
+  display: flex; align-items: center; gap: 7px; white-space: nowrap;
+}
+.site-brand .bolt { color: var(--accent); }
+.site-menu { display: flex; gap: 4px; flex: 1; flex-wrap: wrap; }
+.site-menu a {
+  color: var(--text-dim); text-decoration: none;
+  padding: 8px 15px; border-radius: 8px; font-size: 15px;
+  transition: background .15s, color .15s;
+}
+.site-menu a:hover { color: var(--text); background: var(--panel-2); }
+.site-menu a.active { color: #fff; background: var(--accent-2); }
+.site-menu a.cta { color: #fff; background: var(--accent-2); border: 1px solid var(--accent); }
+@media (max-width: 680px) {
+  .site-nav { flex-wrap: wrap; height: auto; padding: 8px 12px; }
+}

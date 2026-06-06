@@ -1,0 +1,330 @@
+<!DOCTYPE html>
+<html lang="he" dir="rtl">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>סימולטור 8051 — רגיסטרים</title>
+  <link rel="stylesheet" href="../css/style.css">
+  <link rel="stylesheet" href="../css/content.css">
+</head>
+<body>
+  <script src="../js/ui/nav.js"></script>
+
+  <div class="page">
+    <h1>📇 הרגיסטרים של ה-8051</h1>
+    <p class="lead">
+      הסבר בעברית על רגיסטרי הפונקציה המיוחדים (<b>SFR — Special Function Registers</b>)
+      של הבקר <b>C8051F380</b>: מה כל רגיסטר עושה, ופירוט תפקיד כל ביט בו. הרגיסטרים הם
+      ה"לוח בקרה" של הבקר — דרכם שולטים בפינים, בטיימרים, בפסיקות, בתקשורת ובממיר A/D.
+    </p>
+
+    <div class="note">
+      <b>איך ניגשים לביט בודד?</b> כותבים <code>שם_הרגיסטר.מספר_הביט</code>, למשל
+      <code>P1.0</code> הוא הביט הנמוך של הפורט P1. אפשר גם בעברית של C עם
+      <code>sbit LED = P1^0;</code>. הביטים ממוספרים מ-<b>0</b> (הימני/הנמוך) עד <b>7</b> (השמאלי/הגבוה).
+    </div>
+
+    <div class="toc">
+      <h4>תוכן העניינים</h4>
+      <div class="toc-links">
+        <a href="#ports">יציאות (P0–P3)</a>
+        <a href="#timers">טיימרים</a>
+        <a href="#tmod">TMOD</a>
+        <a href="#tcon">TCON</a>
+        <a href="#ckcon">CKCON</a>
+        <a href="#int">פסיקות</a>
+        <a href="#ie">IE</a>
+        <a href="#ip">IP</a>
+        <a href="#it01cf">IT01CF</a>
+        <a href="#uart">UART</a>
+        <a href="#scon0">SCON0</a>
+        <a href="#adc">ADC</a>
+        <a href="#adc0cn">ADC0CN</a>
+        <a href="#ref0cn">REF0CN</a>
+        <a href="#pca">PCA0CN</a>
+        <a href="#spi">SPI</a>
+      </div>
+    </div>
+
+    <!-- ============ יציאות ============ -->
+    <h2 id="ports">יציאות וכניסות — פורטים P0–P3</h2>
+    <p>לבקר ארבעה פורטים של 8 ביטים כל אחד. כל ביט הוא פין פיזי שיכול לשמש ל<b>פלט</b>
+       (הדלקת נורה, הפעלת מנוע) או ל<b>קלט</b> (קריאת כפתור או חיישן).</p>
+    <table class="tbl">
+      <tr><th>פורט</th><th>כתובת SFR</th><th>ביט-נגיש</th><th>שימוש</th></tr>
+      <tr><td class="mono">P0</td><td class="mono">0x80</td><td>כן</td><td>8 פינים P0.0–P0.7</td></tr>
+      <tr><td class="mono">P1</td><td class="mono">0x90</td><td>כן</td><td>8 פינים P1.0–P1.7</td></tr>
+      <tr><td class="mono">P2</td><td class="mono">0xA0</td><td>כן</td><td>8 פינים P2.0–P2.7</td></tr>
+      <tr><td class="mono">P3</td><td class="mono">0xB0</td><td>כן</td><td>8 פינים P3.0–P3.7</td></tr>
+    </table>
+    <pre><code>P1 = 0xFF;          // כל פיני P1 → '1' (פלט גבוה)
+P1 = 0x00;          // כל פיני P1 → '0'
+P1.0 = 1;           // רק הפין P1.0 גבוה
+if (P2.3 == 0) { }  // קריאת כניסה: האם P2.3 לחוץ/נמוך?</code></pre>
+    <div class="note">
+      בבקרי C8051F38x יש להגדיר את הפינים דרך ה-<b>Crossbar</b> ורגיסטרי
+      <code>PnMDOUT</code> (Push-Pull / Open-Drain). אתחול זה נעשה לרוב בתוך
+      <code>Init_Device()</code>.
+    </div>
+
+    <!-- ============ טיימרים ============ -->
+    <h2 id="timers">טיימרים (Timers)</h2>
+    <p>הטיימרים סופרים פעימות שעון ומאפשרים מדידת זמן, יצירת השהיות מדויקות, ספירת אירועים
+       ויצירת קצב תקשורת (Baud Rate). הם נשלטים ע"י <code>TMOD</code>, <code>TCON</code> ו-<code>CKCON</code>,
+       וערכם נשמר בזוגות הרגיסטרים <code>TH0/TL0</code>, <code>TH1/TL1</code>.</p>
+
+    <div class="reg" id="tmod">
+      <div class="reg-head"><h3>TMOD — Timer Mode</h3><span class="reg-addr">0x89</span><span class="reg-tag">אופן עבודת הטיימרים</span></div>
+      <p class="reg-desc">קובע את אופן הפעולה של טיימר 0 וטיימר 1. הבית מחולק לשניים: ארבעת הביטים העליונים לטיימר 1, והתחתונים לטיימר 0.</p>
+      <table class="tbl">
+        <tr><th>ביט</th><th>שם</th><th>תיאור</th></tr>
+        <tr><td class="mono">7</td><td class="mono">GATE1</td><td>שער טיימר 1 — כשהוא '1', הטיימר רץ רק כשהפין INT1 גבוה</td></tr>
+        <tr><td class="mono">6</td><td class="mono">C/T1</td><td>בחירת מקור: '0' = טיימר (פעימות שעון), '1' = מונה (פולסים מהפין)</td></tr>
+        <tr><td class="mono">5–4</td><td class="mono">T1M1:0</td><td>אופן טיימר 1 (ראה טבלת האופנים מטה)</td></tr>
+        <tr><td class="mono">3</td><td class="mono">GATE0</td><td>שער טיימר 0 (כמו GATE1, עבור INT0)</td></tr>
+        <tr><td class="mono">2</td><td class="mono">C/T0</td><td>בחירת מקור לטיימר 0: טיימר/מונה</td></tr>
+        <tr><td class="mono">1–0</td><td class="mono">T0M1:0</td><td>אופן טיימר 0</td></tr>
+      </table>
+      <table class="tbl">
+        <tr><th>M1:M0</th><th>אופן</th><th>הסבר</th></tr>
+        <tr><td class="mono">00</td><td>Mode 0</td><td>מונה 13 ביט</td></tr>
+        <tr><td class="mono">01</td><td>Mode 1</td><td>מונה 16 ביט</td></tr>
+        <tr><td class="mono">10</td><td>Mode 2</td><td>8 ביט עם טעינה-מחדש אוטומטית (auto-reload)</td></tr>
+        <tr><td class="mono">11</td><td>Mode 3</td><td>פיצול לשני מונים נפרדים (טיימר 0 בלבד)</td></tr>
+      </table>
+    </div>
+
+    <div class="reg" id="tcon">
+      <div class="reg-head"><h3>TCON — Timer Control</h3><span class="reg-addr">0x88</span><span class="reg-tag">ביט-נגיש</span></div>
+      <p class="reg-desc">מפעיל/עוצר את הטיימרים, מכיל את דגלי הגלישה (Overflow), ומגדיר את אופן ההפעלה של הפסיקות החיצוניות INT0/INT1.</p>
+      <table class="tbl">
+        <tr><th>ביט</th><th>שם</th><th>תיאור</th></tr>
+        <tr><td class="mono">7</td><td class="mono">TF1</td><td>דגל גלישת טיימר 1 — נדלק ע"י החומרה כשהטיימר עובר את הערך המקסימלי</td></tr>
+        <tr><td class="mono">6</td><td class="mono">TR1</td><td>הפעלת טיימר 1: '1' = רץ, '0' = עצור</td></tr>
+        <tr><td class="mono">5</td><td class="mono">TF0</td><td>דגל גלישת טיימר 0</td></tr>
+        <tr><td class="mono">4</td><td class="mono">TR0</td><td>הפעלת טיימר 0</td></tr>
+        <tr><td class="mono">3</td><td class="mono">IE1</td><td>דגל פסיקת INT1 — נדלק כשמתרחש אירוע על הפין INT1</td></tr>
+        <tr><td class="mono">2</td><td class="mono">IT1</td><td>סוג הפעלת INT1: '1' = לפי קצה יורד, '0' = לפי רמה נמוכה</td></tr>
+        <tr><td class="mono">1</td><td class="mono">IE0</td><td>דגל פסיקת INT0</td></tr>
+        <tr><td class="mono">0</td><td class="mono">IT0</td><td>סוג הפעלת INT0: קצה / רמה</td></tr>
+      </table>
+      <pre><code>TR0 = 1;            // הפעלת טיימר 0
+while (TF0 == 0);   // המתנה עד שהטיימר יגלוש
+TF0 = 0;            // איפוס הדגל ידנית</code></pre>
+    </div>
+
+    <div class="reg" id="ckcon">
+      <div class="reg-head"><h3>CKCON — Clock Control</h3><span class="reg-addr">0x8E</span><span class="reg-tag">מקור שעון לטיימרים</span></div>
+      <p class="reg-desc">בוחר את מקור השעון של כל טיימר — שעון המערכת המלא (SYSCLK) או שעון מואט (Prescaled).</p>
+      <table class="tbl">
+        <tr><th>ביט</th><th>שם</th><th>תיאור</th></tr>
+        <tr><td class="mono">7</td><td class="mono">T3MH</td><td>בחירת שעון לבית הגבוה של טיימר 3</td></tr>
+        <tr><td class="mono">6</td><td class="mono">T3ML</td><td>בחירת שעון לבית הנמוך של טיימר 3</td></tr>
+        <tr><td class="mono">5</td><td class="mono">T2MH</td><td>בחירת שעון לבית הגבוה של טיימר 2</td></tr>
+        <tr><td class="mono">4</td><td class="mono">T2ML</td><td>בחירת שעון לבית הנמוך של טיימר 2</td></tr>
+        <tr><td class="mono">3</td><td class="mono">T1M</td><td>שעון טיימר 1: '1' = SYSCLK, '0' = שעון מואט (לפי SCA)</td></tr>
+        <tr><td class="mono">2</td><td class="mono">T0M</td><td>שעון טיימר 0: '1' = SYSCLK, '0' = שעון מואט</td></tr>
+        <tr><td class="mono">1–0</td><td class="mono">SCA1:0</td><td>בורר ההאטה לטיימרים 0/1: 00=SYSCLK/12, 01=SYSCLK/4, 10=SYSCLK/48, 11=שעון חיצוני</td></tr>
+      </table>
+    </div>
+
+    <!-- ============ פסיקות ============ -->
+    <h2 id="int">פסיקות (Interrupts)</h2>
+    <p>פסיקה מאפשרת לבקר להגיב מיד לאירוע (לחיצת כפתור, גלישת טיימר, קבלת נתון) בלי לבדוק
+       אותו כל הזמן בלולאה. כדי שפסיקה תפעל צריך: (1) לאפשר אותה ב-<code>IE</code>, (2) להדליק את
+       האישור הגלובלי <code>EA</code>, (3) לכתוב שגרת <code>interrupt</code> מתאימה.</p>
+
+    <div class="reg" id="ie">
+      <div class="reg-head"><h3>IE — Interrupt Enable</h3><span class="reg-addr">0xA8</span><span class="reg-tag">ביט-נגיש</span></div>
+      <p class="reg-desc">מאפשר או חוסם כל מקור פסיקה בנפרד. הביט <code>EA</code> הוא "מתג ראשי" — בלעדיו אף פסיקה לא תפעל.</p>
+      <table class="tbl">
+        <tr><th>ביט</th><th>שם</th><th>תיאור</th></tr>
+        <tr><td class="mono">7</td><td class="mono">EA</td><td>אישור פסיקות גלובלי — '1' מאפשר את כל הפסיקות שהופעלו</td></tr>
+        <tr><td class="mono">6</td><td class="mono">ESPI0</td><td>אישור פסיקת SPI0</td></tr>
+        <tr><td class="mono">5</td><td class="mono">ET2</td><td>אישור פסיקת טיימר 2</td></tr>
+        <tr><td class="mono">4</td><td class="mono">ES0</td><td>אישור פסיקת תקשורת טורית UART0</td></tr>
+        <tr><td class="mono">3</td><td class="mono">ET1</td><td>אישור פסיקת טיימר 1</td></tr>
+        <tr><td class="mono">2</td><td class="mono">EX1</td><td>אישור פסיקה חיצונית 1 (INT1)</td></tr>
+        <tr><td class="mono">1</td><td class="mono">ET0</td><td>אישור פסיקת טיימר 0</td></tr>
+        <tr><td class="mono">0</td><td class="mono">EX0</td><td>אישור פסיקה חיצונית 0 (INT0)</td></tr>
+      </table>
+      <pre><code>EX0 = 1;   // אפשר פסיקה חיצונית 0
+EA  = 1;   // הדלק את האישור הגלובלי</code></pre>
+    </div>
+
+    <div class="reg" id="ip">
+      <div class="reg-head"><h3>IP — Interrupt Priority</h3><span class="reg-addr">0xB8</span><span class="reg-tag">ביט-נגיש</span></div>
+      <p class="reg-desc">קובע עדיפות לכל פסיקה: '1' = עדיפות גבוהה, '0' = נמוכה. פסיקה בעדיפות גבוהה יכולה לקטוע פסיקה בעדיפות נמוכה.</p>
+      <table class="tbl">
+        <tr><th>ביט</th><th>שם</th><th>תיאור</th></tr>
+        <tr><td class="mono">6</td><td class="mono">PSPI0</td><td>עדיפות SPI0</td></tr>
+        <tr><td class="mono">5</td><td class="mono">PT2</td><td>עדיפות טיימר 2</td></tr>
+        <tr><td class="mono">4</td><td class="mono">PS0</td><td>עדיפות UART0</td></tr>
+        <tr><td class="mono">3</td><td class="mono">PT1</td><td>עדיפות טיימר 1</td></tr>
+        <tr><td class="mono">2</td><td class="mono">PX1</td><td>עדיפות פסיקה חיצונית 1</td></tr>
+        <tr><td class="mono">1</td><td class="mono">PT0</td><td>עדיפות טיימר 0</td></tr>
+        <tr><td class="mono">0</td><td class="mono">PX0</td><td>עדיפות פסיקה חיצונית 0</td></tr>
+      </table>
+    </div>
+
+    <div class="reg" id="it01cf">
+      <div class="reg-head"><h3>IT01CF — INT0/INT1 Configuration</h3><span class="reg-addr">0xE4</span><span class="reg-tag">בחירת פין וקוטביות</span></div>
+      <p class="reg-desc">בוחר לאיזה פין יחוברו הפסיקות החיצוניות INT0/INT1 ובאיזו קוטביות (פעיל גבוה/נמוך).</p>
+      <table class="tbl">
+        <tr><th>ביט</th><th>שם</th><th>תיאור</th></tr>
+        <tr><td class="mono">7</td><td class="mono">IN1PL</td><td>קוטביות INT1: '0' = פעיל בנמוך, '1' = פעיל בגבוה</td></tr>
+        <tr><td class="mono">6–4</td><td class="mono">IN1SL2:0</td><td>בחירת פין ל-INT1 (0 = P0.0 … 7 = P0.7)</td></tr>
+        <tr><td class="mono">3</td><td class="mono">IN0PL</td><td>קוטביות INT0</td></tr>
+        <tr><td class="mono">2–0</td><td class="mono">IN0SL2:0</td><td>בחירת פין ל-INT0</td></tr>
+      </table>
+    </div>
+
+    <h3>טבלת מקורות הפסיקה</h3>
+    <table class="tbl">
+      <tr><th>מקור</th><th>מספר</th><th>וקטור</th><th>דגל</th><th>ביט אישור</th></tr>
+      <tr><td>INT0</td><td class="mono">0</td><td class="mono">0x0003</td><td class="mono">IE0</td><td class="mono">EX0</td></tr>
+      <tr><td>Timer 0</td><td class="mono">1</td><td class="mono">0x000B</td><td class="mono">TF0</td><td class="mono">ET0</td></tr>
+      <tr><td>INT1</td><td class="mono">2</td><td class="mono">0x0013</td><td class="mono">IE1</td><td class="mono">EX1</td></tr>
+      <tr><td>Timer 1</td><td class="mono">3</td><td class="mono">0x001B</td><td class="mono">TF1</td><td class="mono">ET1</td></tr>
+      <tr><td>UART0</td><td class="mono">4</td><td class="mono">0x0023</td><td class="mono">RI0/TI0</td><td class="mono">ES0</td></tr>
+      <tr><td>Timer 2</td><td class="mono">5</td><td class="mono">0x002B</td><td class="mono">TF2</td><td class="mono">ET2</td></tr>
+      <tr><td>SPI0</td><td class="mono">6</td><td class="mono">0x0033</td><td class="mono">SPIF</td><td class="mono">ESPI0</td></tr>
+    </table>
+
+    <!-- ============ UART ============ -->
+    <h2 id="uart">תקשורת טורית — UART0</h2>
+    <p>ה-UART שולח ומקבל נתונים בטור (פין אחד לשליחה, אחד לקבלה). קצב התקשורת (Baud Rate)
+       נקבע ע"י טיימר 1 בדרך כלל. הנוסחה:</p>
+    <pre><code>Baud Rate = (1/2) × (Overflow Rate of Timer 1)
+Overflow Rate = T1CLK / (256 - TH1)</code></pre>
+
+    <div class="reg" id="scon0">
+      <div class="reg-head"><h3>SCON0 — Serial Port 0 Control</h3><span class="reg-addr">0x98</span><span class="reg-tag">ביט-נגיש</span></div>
+      <p class="reg-desc">שולט באופן הפעולה של ה-UART, מאפשר קבלה, ומכיל את דגלי השליחה/קבלה.</p>
+      <table class="tbl">
+        <tr><th>ביט</th><th>שם</th><th>תיאור</th></tr>
+        <tr><td class="mono">7</td><td class="mono">S0MODE</td><td>אופן: '0' = 8 ביט, '1' = 9 ביט</td></tr>
+        <tr><td class="mono">5</td><td class="mono">MCE0</td><td>אישור תקשורת רב-מעבדית</td></tr>
+        <tr><td class="mono">4</td><td class="mono">REN0</td><td>אישור קבלה: '1' = מאפשר קליטת נתונים</td></tr>
+        <tr><td class="mono">3</td><td class="mono">TB80</td><td>הביט התשיעי לשליחה</td></tr>
+        <tr><td class="mono">2</td><td class="mono">RB80</td><td>הביט התשיעי שהתקבל</td></tr>
+        <tr><td class="mono">1</td><td class="mono">TI0</td><td>דגל סיום שליחה — נדלק בחומרה, מאפסים בתוכנה</td></tr>
+        <tr><td class="mono">0</td><td class="mono">RI0</td><td>דגל קבלת נתון — נדלק כשהתקבל בית, מאפסים בתוכנה</td></tr>
+      </table>
+    </div>
+
+    <div class="reg">
+      <div class="reg-head"><h3>SBUF0 — Serial Data Buffer</h3><span class="reg-addr">0x99</span><span class="reg-tag">חוצץ נתונים</span></div>
+      <p class="reg-desc">רגיסטר הנתונים של ה-UART. <b>כתיבה</b> אליו מתחילה שליחה; <b>קריאה</b> ממנו מחזירה את הבית האחרון שהתקבל.</p>
+      <pre><code>SBUF0 = 'A';            // שליחת התו 'A'
+while (TI0 == 0); TI0 = 0;   // המתנה לסיום שליחה
+char c = SBUF0;         // קריאת בית שהתקבל</code></pre>
+    </div>
+
+    <!-- ============ ADC ============ -->
+    <h2 id="adc">ממיר אנלוגי-דיגיטלי (ADC0)</h2>
+    <p>ה-ADC ממיר מתח אנלוגי (למשל מפוטנציומטר או חיישן אור) למספר דיגיטלי. לבקר ממיר
+       <b>10 ביט</b> (ערכים 0–1023).</p>
+
+    <div class="reg" id="adc0cn">
+      <div class="reg-head"><h3>ADC0CN — ADC0 Control</h3><span class="reg-addr">0xE8</span><span class="reg-tag">ביט-נגיש</span></div>
+      <p class="reg-desc">מפעיל את הממיר, מתחיל המרה, ומכיל את דגל סיום ההמרה.</p>
+      <table class="tbl">
+        <tr><th>ביט</th><th>שם</th><th>תיאור</th></tr>
+        <tr><td class="mono">7</td><td class="mono">AD0EN</td><td>הפעלת הממיר: '1' = פעיל</td></tr>
+        <tr><td class="mono">6</td><td class="mono">AD0TM</td><td>אופן מעקב (Track) לפני המרה</td></tr>
+        <tr><td class="mono">5</td><td class="mono">AD0INT</td><td>דגל סיום המרה — נדלק כשההמרה הסתיימה (מאפסים בתוכנה)</td></tr>
+        <tr><td class="mono">4</td><td class="mono">AD0BUSY</td><td>עסוק / התחל: כתיבת '1' מתחילה המרה</td></tr>
+        <tr><td class="mono">3</td><td class="mono">AD0WINT</td><td>דגל השוואת חלון (Window Compare)</td></tr>
+        <tr><td class="mono">2–0</td><td class="mono">AD0CM2:0</td><td>בחירת מקור התחלת ההמרה (תוכנה / טיימר / פין)</td></tr>
+      </table>
+      <pre><code>AD0EN  = 1;            // הפעל ממיר
+AD0INT = 0;
+AD0BUSY = 1;           // התחל המרה
+while (AD0INT == 0);   // המתן לסיום
+unsigned int v = (ADC0H &lt;&lt; 8) | ADC0L;   // קרא תוצאה (10 ביט)</code></pre>
+    </div>
+
+    <div class="reg">
+      <div class="reg-head"><h3>ADC0CF — ADC0 Configuration</h3><span class="reg-addr">0xBC</span><span class="reg-tag">קצב ורזולוציה</span></div>
+      <p class="reg-desc">קובע את שעון ההמרה (SAR clock) ואת רזולוציית הממיר.</p>
+      <table class="tbl">
+        <tr><th>ביט</th><th>שם</th><th>תיאור</th></tr>
+        <tr><td class="mono">7–3</td><td class="mono">AD0SC4:0</td><td>מחלק שעון ה-SAR — קובע את מהירות ההמרה מתוך SYSCLK</td></tr>
+        <tr><td class="mono">2</td><td class="mono">AD08BE</td><td>אופן 8 ביט: '1' = 8 ביט, '0' = 10 ביט</td></tr>
+        <tr><td class="mono">1–0</td><td class="mono">—</td><td>הגדרות נוספות (הגבר / יישור התוצאה)</td></tr>
+      </table>
+    </div>
+
+    <div class="reg" id="ref0cn">
+      <div class="reg-head"><h3>REF0CN — Voltage Reference Control</h3><span class="reg-addr">0xD1</span><span class="reg-tag">מתח ייחוס</span></div>
+      <p class="reg-desc">בוחר את מתח הייחוס (VREF) של הממיר ומפעיל את חיישן הטמפרטורה הפנימי ומקורות ההטיה.</p>
+      <table class="tbl">
+        <tr><th>ביט</th><th>שם</th><th>תיאור</th></tr>
+        <tr><td class="mono">4</td><td class="mono">REFSL</td><td>בחירת מקור מתח הייחוס: '1' = מתח ההזנה VDD, '0' = ייחוס פנימי / חיצוני</td></tr>
+        <tr><td class="mono">3</td><td class="mono">TEMPE</td><td>הפעלת חיישן הטמפרטורה הפנימי</td></tr>
+        <tr><td class="mono">2</td><td class="mono">BIASE</td><td>הפעלת מקור ההטיה הפנימי</td></tr>
+        <tr><td class="mono">1</td><td class="mono">REFBE</td><td>הפעלת חוצץ הייחוס הפנימי</td></tr>
+      </table>
+      <p>דוגמה נפוצה: <code>REF0CN = 0x10;</code> בוחר את VDD (‎3.3V) כמתח ייחוס לממיר.</p>
+    </div>
+
+    <!-- ============ PCA ============ -->
+    <h2 id="pca">מערך מונים מתוכנת — PCA</h2>
+    <div class="reg">
+      <div class="reg-head"><h3>PCA0CN — PCA Control</h3><span class="reg-addr">0xD8</span><span class="reg-tag">ביט-נגיש</span></div>
+      <p class="reg-desc">ה-PCA (Programmable Counter Array) משמש ליצירת אותות PWM, מדידת זמן והשוואות. רגיסטר זה מפעיל את המונה ומכיל את דגלי המודולים.</p>
+      <table class="tbl">
+        <tr><th>ביט</th><th>שם</th><th>תיאור</th></tr>
+        <tr><td class="mono">7</td><td class="mono">CF</td><td>דגל גלישת מונה ה-PCA</td></tr>
+        <tr><td class="mono">6</td><td class="mono">CR</td><td>הפעלת מונה ה-PCA: '1' = רץ</td></tr>
+        <tr><td class="mono">4–0</td><td class="mono">CCF4:0</td><td>דגלי לכידה/השוואה של מודולים 0–4</td></tr>
+      </table>
+    </div>
+
+    <!-- ============ SPI ============ -->
+    <h2 id="spi">ממשק SPI (SPI0)</h2>
+    <p>SPI הוא ממשק תקשורת טורי-סינכרוני מהיר לחיבור התקנים (זיכרונות, חיישנים, צגים).
+       הוא משתמש בקווי SCK (שעון), MOSI, MISO ו-NSS.</p>
+
+    <div class="reg">
+      <div class="reg-head"><h3>SPI0CFG — SPI0 Configuration</h3><span class="reg-addr">0xA1</span><span class="reg-tag">תצורה</span></div>
+      <table class="tbl">
+        <tr><th>ביט</th><th>שם</th><th>תיאור</th></tr>
+        <tr><td class="mono">7</td><td class="mono">SPIBSY</td><td>עסוק — העברה מתבצעת (קריאה בלבד)</td></tr>
+        <tr><td class="mono">6</td><td class="mono">MSTEN</td><td>אופן Master: '1' = הבקר הוא ה-Master</td></tr>
+        <tr><td class="mono">5</td><td class="mono">CKPHA</td><td>פאזת שעון</td></tr>
+        <tr><td class="mono">4</td><td class="mono">CKPOL</td><td>קוטביות שעון</td></tr>
+        <tr><td class="mono">3–0</td><td class="mono">—</td><td>דגלי מצב (slave selected, shift empty וכו')</td></tr>
+      </table>
+    </div>
+
+    <div class="reg">
+      <div class="reg-head"><h3>SPI0CN — SPI0 Control</h3><span class="reg-addr">0xF8</span><span class="reg-tag">ביט-נגיש</span></div>
+      <table class="tbl">
+        <tr><th>ביט</th><th>שם</th><th>תיאור</th></tr>
+        <tr><td class="mono">7</td><td class="mono">SPIF</td><td>דגל פסיקת SPI — נדלק בסיום העברה</td></tr>
+        <tr><td class="mono">6</td><td class="mono">WCOL</td><td>דגל התנגשות כתיבה</td></tr>
+        <tr><td class="mono">5</td><td class="mono">MODF</td><td>דגל תקלת אופן (Mode Fault)</td></tr>
+        <tr><td class="mono">4</td><td class="mono">RXOVRN</td><td>דגל הצפת קבלה</td></tr>
+        <tr><td class="mono">3–2</td><td class="mono">NSSMD1:0</td><td>אופן פין ה-NSS</td></tr>
+        <tr><td class="mono">1</td><td class="mono">TXBMT</td><td>חוצץ השליחה ריק</td></tr>
+        <tr><td class="mono">0</td><td class="mono">SPIEN</td><td>הפעלת SPI: '1' = פעיל</td></tr>
+      </table>
+    </div>
+
+    <div class="reg">
+      <div class="reg-head"><h3>SPI0CKR / SPI0DAT</h3><span class="reg-addr">0xA2 / 0xA3</span><span class="reg-tag">שעון ונתונים</span></div>
+      <p class="reg-desc">
+        <code>SPI0CKR</code> — מחלק קצב השעון: <code>SCK = SYSCLK / (2 × (SPI0CKR + 1))</code>.<br>
+        <code>SPI0DAT</code> — רגיסטר הנתונים: כתיבה שולחת בית, קריאה מחזירה את הבית שהתקבל.
+      </p>
+    </div>
+
+    <p style="margin-top:30px; color:var(--text-dim); font-size:13px;">
+      המקור: נוסחאון מיקרו-בקרים (C8051F380) — מתורגם ומוסבר בעברית.
+      ערכי הביטים תואמים לגליון הנתונים של Silicon Labs.
+    </p>
+  </div>
+</body>
+</html>

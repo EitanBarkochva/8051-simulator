@@ -30,6 +30,8 @@
     .sub { margin-top: 18px; }
     .gradebar { height: 7px; background: var(--panel-2); border-radius: 4px; overflow: hidden; min-width: 80px; display: inline-block; vertical-align: middle; }
     .gradebar > i { display: block; height: 100%; background: var(--ok); }
+    .btn-danger { color: var(--err); padding: 3px 9px; }
+    .btn-danger:hover { background: rgba(248,113,113,.12); border-color: var(--err); }
   </style>
 </head>
 <body>
@@ -66,6 +68,11 @@
 
           <div class="sub">
             <h2>תלמידים (<span id="members-count">0</span>)</h2>
+            <div class="row">
+              <input id="add-student-email" type="email" placeholder="אימייל התלמיד להוספה" style="flex:1">
+              <button class="primary" id="btn-add-student">➕ הוסף תלמיד</button>
+            </div>
+            <div class="muted" id="add-student-msg" style="min-height:16px; margin-bottom:6px"></div>
             <div id="members"></div>
           </div>
 
@@ -148,9 +155,16 @@
         const members = await LMS.Classes.members(classId);
         $("members-count").textContent = members.length;
         $("members").innerHTML = members.length
-          ? `<table><tr><th>שם</th><th>הצטרף/ה</th></tr>${members.map((m) =>
-              `<tr><td>${esc(m.name)}</td><td class="muted">${new Date(m.joinedAt).toLocaleDateString("he-IL")}</td></tr>`).join("")}</table>`
-          : `<p class="muted">אין תלמידים. שתף את קוד ההצטרפות עם התלמידים.</p>`;
+          ? `<table><tr><th>שם</th><th>הצטרף/ה</th><th></th></tr>${members.map((m) =>
+              `<tr><td>${esc(m.name)}</td><td class="muted">${new Date(m.joinedAt).toLocaleDateString("he-IL")}</td>
+               <td><button class="rm-student btn-danger" data-id="${m.id}" title="הסר מהכיתה">✕</button></td></tr>`).join("")}</table>`
+          : `<p class="muted">אין תלמידים. הוסף תלמיד לפי אימייל למעלה, או שתף את קוד ההצטרפות.</p>`;
+        $("members").querySelectorAll(".rm-student").forEach((b) =>
+          b.addEventListener("click", async () => {
+            if (!confirm("להסיר את התלמיד מהכיתה?")) return;
+            try { await LMS.Classes.removeStudent(classId, b.dataset.id); renderMembers(classId); }
+            catch (e) { alert("שגיאה: " + e.message); }
+          }));
       }
 
       async function renderAssignments(classId) {
@@ -217,6 +231,22 @@
         try { await LMS.Classes.create(name); $("new-class-name").value = ""; renderClasses(); }
         catch (e) { alert("שגיאה: " + e.message); }
       });
+      $("btn-add-student").addEventListener("click", async () => {
+        const email = $("add-student-email").value.trim();
+        const msg = $("add-student-msg");
+        if (!selectedClass) { msg.textContent = "בחר כיתה תחילה"; return; }
+        if (!email) { msg.textContent = "מלא אימייל של תלמיד"; return; }
+        msg.style.color = "var(--text-dim)"; msg.textContent = "מוסיף…";
+        try {
+          const s = await LMS.Classes.addStudent(selectedClass, email);
+          $("add-student-email").value = "";
+          msg.style.color = "var(--ok)";
+          msg.textContent = s ? `✓ ${s.name} נוסף/ה לכיתה` : "✓ נוסף";
+          renderMembers(selectedClass);
+        } catch (e) { msg.style.color = "var(--err)"; msg.textContent = "שגיאה: " + e.message; }
+      });
+      $("add-student-email").addEventListener("keydown", (e) => { if (e.key === "Enter") $("btn-add-student").click(); });
+
       $("btn-assign").addEventListener("click", async () => {
         const exerciseId = $("assign-ex").value;
         if (!exerciseId || !selectedClass) { alert("בחר כיתה ותרגיל"); return; }

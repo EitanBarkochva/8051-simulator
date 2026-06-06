@@ -6,7 +6,8 @@
   <title>8051 Simulator — כניסה</title>
   <link rel="stylesheet" href="../css/style.css">
   <style>
-    body { display: grid; place-items: center; min-height: 100vh; }
+    body { display: flex; flex-direction: column; min-height: 100vh; }
+    .login-main { flex: 1; display: grid; place-items: center; padding: 24px; }
     .login-card {
       width: 340px; max-width: 92vw;
       background: var(--panel); border: 1px solid var(--border);
@@ -39,6 +40,8 @@
   </style>
 </head>
 <body>
+  <script src="../js/ui/nav.js"></script>
+  <main class="login-main">
   <div class="login-card">
     <h1>⚡ 8051 Simulator</h1>
     <div class="sub">סביבת לימוד למיקרו-בקר 8051</div>
@@ -72,6 +75,7 @@
     <div class="msg" id="msg"></div>
     <div class="mode-note" id="mode-note"></div>
   </div>
+  </main>
 
   <!-- Supabase SDK (CDN) → config → db → auth -->
   <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>

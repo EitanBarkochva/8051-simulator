@@ -1,0 +1,293 @@
+<!DOCTYPE html>
+<html lang="he" dir="rtl">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>סימולטור 8051 — שפת C</title>
+  <link rel="stylesheet" href="../css/style.css">
+  <link rel="stylesheet" href="../css/content.css">
+</head>
+<body>
+  <script src="../js/ui/nav.js"></script>
+
+  <div class="page">
+    <h1>💻 שפת C למיקרו-בקר 8051</h1>
+    <p class="lead">
+      מדריך שפת C לבקר <b>C8051F380</b> של Silicon Labs (משפחת 8051), בסביבת הפיתוח
+      <b>Keil µVision</b>. כאן מרוכזים טיפוסי הנתונים, האופרטורים, מבני התנאי והלולאה,
+      המערכים, הפונקציות ושגרות הפסיקה — עם דוגמאות קוד.
+    </p>
+
+    <div class="toc">
+      <h4>תוכן העניינים</h4>
+      <div class="toc-links">
+        <a href="#intro">מבנה תוכנית</a>
+        <a href="#types">טיפוסי נתונים</a>
+        <a href="#memory">אזורי זיכרון</a>
+        <a href="#pre">קדם-מעבד</a>
+        <a href="#ops">אופרטורים</a>
+        <a href="#cond">מבני תנאי</a>
+        <a href="#loops">לולאות</a>
+        <a href="#arrays">מערכים</a>
+        <a href="#func">פונקציות</a>
+        <a href="#isr">פסיקות (ISR)</a>
+        <a href="#delay">השהיות</a>
+      </div>
+    </div>
+
+    <h2 id="intro">מבנה תוכנית בסיסי</h2>
+    <p>כל תוכנית מתחילה בהכללת קובצי ההגדרות של הבקר, ולאחר מכן פונקציית <code>main</code>
+       שבתוכה לולאה אינסופית <code>while(1)</code> שבה רץ הקוד שלכם שוב ושוב.</p>
+    <pre><code>#include "compiler_defs.h"
+#include "C8051F380_defs.h"
+
+void Init_Device(void);                 // אתחול הבקר (כיבוי ה-Watchdog, הגדרת שעון ופינים)
+void delay_ms(unsigned int ms);
+void delay_us(unsigned int us);
+
+void main()
+{
+    Init_Device();                      // חובה בתחילת התוכנית
+    while (1)
+    {
+        // הקוד שלך כאן — רץ בלולאה אינסופית
+    }
+}</code></pre>
+    <div class="note">
+      <b>שים לב:</b> את הביטוי <code>Init_Device()</code> חובה לקרוא בתחילת
+      <code>main</code> — הוא מכבה את ה-Watchdog ומגדיר את השעון והפינים של הבקר.
+    </div>
+
+    <h2 id="types">טיפוסי נתונים (Data Types)</h2>
+    <table class="tbl">
+      <tr><th>טיפוס</th><th>תיאור</th><th>גודל</th><th>טווח</th></tr>
+      <tr><td class="mono">bit</td><td>ביט בודד</td><td>1 ביט</td><td>0 עד 1</td></tr>
+      <tr><td class="mono">char / S8</td><td>תו או מספר שלם קטן (עם סימן)</td><td>בית אחד</td><td>‎-128 עד 127</td></tr>
+      <tr><td class="mono">unsigned char / U8</td><td>מספר שלם קטן ללא סימן</td><td>בית אחד</td><td>0 עד 255</td></tr>
+      <tr><td class="mono">int / S16</td><td>מספר שלם (עם סימן)</td><td>2 בתים</td><td>‎-32768 עד 32767</td></tr>
+      <tr><td class="mono">unsigned int / U16</td><td>מספר שלם ללא סימן</td><td>2 בתים</td><td>0 עד 65535</td></tr>
+      <tr><td class="mono">long / S32</td><td>מספר שלם 32 ביט</td><td>4 בתים</td><td>‎-2,147,483,648 עד 2,147,483,647</td></tr>
+      <tr><td class="mono">unsigned long / U32</td><td>שלם 32 ביט ללא סימן</td><td>4 בתים</td><td>0 עד 4,294,967,295</td></tr>
+      <tr><td class="mono">float</td><td>מספר ממשי (נקודה צפה)</td><td>4 בתים</td><td>‎±1.18E-38 עד ±3.40E+38</td></tr>
+      <tr><td class="mono">sbit</td><td>ביט מיוחד (ביט בודד ברגיסטר SFR)</td><td>1 ביט</td><td>0 עד 1</td></tr>
+      <tr><td class="mono">sfr</td><td>רגיסטר פונקציה מיוחד (Special Function Register)</td><td>בית אחד</td><td>0 עד 255</td></tr>
+      <tr><td class="mono">sfr16</td><td>רגיסטר SFR בגודל 16 ביט</td><td>2 בתים</td><td>0 עד 65535</td></tr>
+    </table>
+    <p>דוגמאות הצהרה:</p>
+    <pre><code>unsigned char a;
+int b, c;
+sfr  P1   = 0x90;          // הגדרת רגיסטר הפורט P1 בכתובת 0x90
+sbit P1_7 = P1^7;          // הביט השביעי של הפורט P1</code></pre>
+
+    <h2 id="memory">אזורי זיכרון (Memory Areas)</h2>
+    <p>בבקר 8051 קובעים היכן יישמר משתנה באמצעות מילת מפתח לפני שם הטיפוס:</p>
+    <table class="tbl">
+      <tr><th>מילת מפתח</th><th>תיאור</th><th>דוגמה</th></tr>
+      <tr><td class="mono">data</td><td>RAM פנימי עם כתובת ישירה (מהיר)</td><td class="mono">unsigned int data dnum;</td></tr>
+      <tr><td class="mono">idata</td><td>RAM פנימי עם כתובת עקיפה</td><td class="mono">int idata inum;</td></tr>
+      <tr><td class="mono">xdata</td><td>RAM חיצוני</td><td class="mono">unsigned char xdata xnum;</td></tr>
+      <tr><td class="mono">code</td><td>זיכרון התוכנית (קבועים, לקריאה בלבד)</td><td class="mono">unsigned char code cnum = 0xAA;</td></tr>
+    </table>
+    <p>ניתן למקם משתנה בכתובת מוחלטת בעזרת <code>_at_</code>:</p>
+    <pre><code>unsigned char xdata xnum _at_ 0x8000;   // המשתנה ימוקם בכתובת 0x8000</code></pre>
+
+    <h2 id="pre">הנחיות קדם-מעבד (Preprocessor)</h2>
+    <table class="tbl">
+      <tr><th>תיאור</th><th>תחביר</th><th>דוגמה</th></tr>
+      <tr><td>הגדרת מאקרו / קבוע</td><td class="mono">#define identifier replacement</td><td class="mono">#define LED P1_7</td></tr>
+      <tr><td>הכללת קובץ</td><td class="mono">#include "file.h"</td><td class="mono">#include "C8051F380_defs.h"</td></tr>
+    </table>
+    <p><code>identifier</code> — המזהה (שם), <code>replacement</code> — מה שיבוא במקומו.</p>
+
+    <h2 id="ops">אופרטורים (Operators)</h2>
+
+    <h3>השמה ואתחול משתנים</h3>
+    <pre><code>unsigned char d = 0;
+d = 75;          // מספר עשרוני (decimal)
+d = 0x4B;        // אותו ערך בהקסדצימלי (hex)</code></pre>
+
+    <h3>אופרטורים אריתמטיים</h3>
+    <table class="tbl">
+      <tr><th>אופרטור</th><th>פעולה</th></tr>
+      <tr><td class="mono">+</td><td>חיבור</td></tr>
+      <tr><td class="mono">-</td><td>חיסור</td></tr>
+      <tr><td class="mono">*</td><td>כפל</td></tr>
+      <tr><td class="mono">/</td><td>חילוק</td></tr>
+      <tr><td class="mono">%</td><td>שארית (modulo)</td></tr>
+    </table>
+
+    <h3>אופרטורי יחס והשוואה</h3>
+    <table class="tbl">
+      <tr><th>אופרטור</th><th>משמעות</th></tr>
+      <tr><td class="mono">==</td><td>שווה ל-</td></tr>
+      <tr><td class="mono">!=</td><td>לא שווה ל-</td></tr>
+      <tr><td class="mono">&gt;</td><td>גדול מ-</td></tr>
+      <tr><td class="mono">&lt;</td><td>קטן מ-</td></tr>
+      <tr><td class="mono">&gt;=</td><td>גדול או שווה</td></tr>
+      <tr><td class="mono">&lt;=</td><td>קטן או שווה</td></tr>
+    </table>
+
+    <h3>אופרטורים לוגיים</h3>
+    <table class="tbl">
+      <tr><th>אופרטור</th><th>משמעות</th></tr>
+      <tr><td class="mono">!</td><td>NOT — שלילה לוגית</td></tr>
+      <tr><td class="mono">&amp;&amp;</td><td>AND — וגם</td></tr>
+      <tr><td class="mono">||</td><td>OR — או</td></tr>
+    </table>
+
+    <h3>אופרטורים ביטיים (Bitwise)</h3>
+    <table class="tbl">
+      <tr><th>אופרטור</th><th>פעולה</th></tr>
+      <tr><td class="mono">&amp;</td><td>AND ברמת הביט</td></tr>
+      <tr><td class="mono">|</td><td>OR ברמת הביט</td></tr>
+      <tr><td class="mono">^</td><td>XOR — או בלעדי</td></tr>
+      <tr><td class="mono">~</td><td>NOT — היפוך כל הביטים</td></tr>
+      <tr><td class="mono">&lt;&lt;</td><td>הזזה שמאלה (Shift Left)</td></tr>
+      <tr><td class="mono">&gt;&gt;</td><td>הזזה ימינה (Shift Right)</td></tr>
+    </table>
+    <div class="note">
+      <b>טיפ:</b> אופרטורים ביטיים שימושיים מאוד לשליטה בפינים בודדים —
+      <code>P1 |= 0x01;</code> מדליק את ביט 0, <code>P1 &amp;= ~0x01;</code> מכבה אותו,
+      ו-<code>P1 ^= 0x01;</code> הופך את מצבו.
+    </div>
+
+    <h2 id="cond">מבני תנאי (Conditional)</h2>
+    <table class="tbl">
+      <tr><th>מבנה</th><th>דוגמה</th></tr>
+      <tr><td class="mono">if</td><td class="mono">if (d == 100) { P1 = 0xFF; }</td></tr>
+      <tr><td class="mono">if / else</td><td class="mono">if (d == 100) P1 = 0xFF;<br>else P1 = 0;</td></tr>
+      <tr><td class="mono">if / else if / else</td><td class="mono">if (d &gt; 0) P1 = 4;<br>else if (d &lt; 0) P1 = 2;<br>else P1 = 1;</td></tr>
+    </table>
+    <pre><code>if (d == 100)
+{
+    P1 = 0xFF;
+}
+else if (d &gt; 50)
+{
+    P1 = 0x0F;
+}
+else
+{
+    P1 = 0x00;
+}</code></pre>
+
+    <h2 id="loops">לולאות (Iteration)</h2>
+    <table class="tbl">
+      <tr><th>סוג</th><th>תחביר</th></tr>
+      <tr><td class="mono">while</td><td class="mono">while (expression) statements</td></tr>
+      <tr><td class="mono">do-while</td><td class="mono">do statements while (condition);</td></tr>
+      <tr><td class="mono">for</td><td class="mono">for (init; condition; increase) statements</td></tr>
+    </table>
+    <pre><code>// while — בודק תנאי לפני כל מחזור
+while (n &gt; 0) {
+    P1 = n;
+    n--;
+}
+
+// do-while — מבצע לפחות פעם אחת, בודק תנאי בסוף
+do {
+    n = P1;
+} while (n != 0);
+
+// for — אתחול, תנאי, וקידום במשתנה מונה
+for (i = 0; i &lt; 10; i++) {
+    P1 = i;
+}</code></pre>
+
+    <h2 id="arrays">מערכים (Arrays)</h2>
+    <table class="tbl">
+      <tr><th>פעולה</th><th>דוגמה</th></tr>
+      <tr><td>הצהרה</td><td class="mono">char arr[5];</td></tr>
+      <tr><td>הצהרה עם אתחול</td><td class="mono">int arr[5] = {3, 5, 7, -1, 14};</td></tr>
+      <tr><td>מערך דו-ממדי</td><td class="mono">int arr[3][5];</td></tr>
+      <tr><td>גישה לאיבר</td><td class="mono">arr[1][3]</td></tr>
+    </table>
+    <p>איברי המערך ממוספרים החל מ-<b>0</b>. כך למשל <code>arr[0]</code> הוא האיבר הראשון
+       ו-<code>arr[4]</code> הוא החמישי במערך בגודל 5.</p>
+
+    <h2 id="func">פונקציות (Functions)</h2>
+
+    <h3>פונקציה ללא טיפוס וללא ארגומנט</h3>
+    <pre><code>void OutData(void)
+{
+    P1 = 0xAB;
+}
+
+void main()
+{
+    OutData();
+}</code></pre>
+
+    <h3>פונקציה עם ארגומנטים (ללא ערך מוחזר)</h3>
+    <pre><code>void OutData(unsigned char a, unsigned char b)
+{
+    P0 = a;
+    P1 = b;
+}
+
+void main()
+{
+    OutData(0x0F, 0xF0);
+}</code></pre>
+
+    <h3>פונקציה עם טיפוס מוחזר וארגומנט</h3>
+    <pre><code>unsigned char InOutData(unsigned char a)
+{
+    P1 = a;
+    return P0;          // מחזירה ערך
+}
+
+void main()
+{
+    unsigned char r;
+    r = InOutData(63);
+    P2 = r;
+}</code></pre>
+    <p><b>parameter</b> — פרמטר (ארגומנט); <b>type</b> — טיפוס הערך המוחזר;
+       <b>return</b> — מחזיר ערך מהפונקציה.</p>
+
+    <h2 id="isr">שגרות פסיקה (Interrupt Service Routines)</h2>
+    <p>פסיקה (Interrupt) היא אירוע שמפסיק את הריצה הרגילה ומקפיץ את הבקר לשגרה ייעודית.
+       מגדירים שגרת פסיקה עם המילה <code>interrupt</code> ומספר הפסיקה:</p>
+    <pre><code>void int2sub() interrupt 2 {
+    // קוד הפסיקה — ירוץ כשפסיקה מספר 2 מתרחשת
+}</code></pre>
+    <table class="tbl">
+      <tr><th>מקור הפסיקה</th><th>מספר</th><th>כתובת וקטור</th></tr>
+      <tr><td>Reset</td><td class="mono">—</td><td class="mono">0x0000</td></tr>
+      <tr><td>External Interrupt 0 (INT0)</td><td class="mono">0</td><td class="mono">0x0003</td></tr>
+      <tr><td>Timer 0 Overflow</td><td class="mono">1</td><td class="mono">0x000B</td></tr>
+      <tr><td>External Interrupt 1 (INT1)</td><td class="mono">2</td><td class="mono">0x0013</td></tr>
+      <tr><td>Timer 1 Overflow</td><td class="mono">3</td><td class="mono">0x001B</td></tr>
+      <tr><td>UART0</td><td class="mono">4</td><td class="mono">0x0023</td></tr>
+      <tr><td>Timer 2 Overflow</td><td class="mono">5</td><td class="mono">0x002B</td></tr>
+      <tr><td>SPI0</td><td class="mono">6</td><td class="mono">0x0033</td></tr>
+      <tr><td>SMBus (SMB0)</td><td class="mono">7</td><td class="mono">0x003B</td></tr>
+      <tr><td>ADC0 Conversion Complete</td><td class="mono">10</td><td class="mono">0x0053</td></tr>
+    </table>
+    <div class="note">
+      להפעלת פסיקה צריך גם לאפשר אותה ברגיסטר <code>IE</code> (Interrupt Enable) ולהדליק את
+      ביט ה-<code>EA</code> (אישור פסיקות גלובלי). פירוט מלא בעמוד
+      <a href="registers.html" style="color:var(--accent)">הרגיסטרים</a>.
+    </div>
+
+    <h2 id="delay">השהיות (Delay)</h2>
+    <p>לבקר יש פונקציות השהיה מובנות ליצירת עיכוב מדויק (למשל להבהוב נורה):</p>
+    <pre><code>void delay_ms(unsigned int ms);   // השהיה באלפיות שנייה
+void delay_us(unsigned int us);   // השהיה במיליוניות שנייה
+
+// דוגמה — הבהוב נורה על P1.0
+while (1) {
+    P1 = 0x01;
+    delay_ms(500);
+    P1 = 0x00;
+    delay_ms(500);
+}</code></pre>
+
+    <p style="margin-top:30px; color:var(--text-dim); font-size:13px;">
+      המקור: נוסחאון מיקרו-בקרים (C8051F380), בתוספת הרחבות.
+      רוצים להתנסות? עברו ל<a href="simulator.html" style="color:var(--accent)">סימולציה</a>.
+    </p>
+  </div>
+</body>
+</html>

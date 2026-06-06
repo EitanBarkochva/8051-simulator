@@ -21,6 +21,11 @@
 }
 .topbar .title { font-size: 16px; font-weight: 700; letter-spacing: .5px; color: var(--text); text-decoration: none; }
 .topbar .title:hover { color: var(--accent); }
+.topbar .topnav-link {
+  font-size: 13px; color: var(--text-dim); text-decoration: none;
+  padding: 6px 10px; border-radius: 6px; border: 1px solid var(--border);
+}
+.topbar .topnav-link:hover { color: var(--text); background: var(--panel-2); }
 .topbar .spacer { flex: 1; }
 .topbar .status { font-size: 13px; color: var(--text-dim); }
 .project-name {
@@ -60,6 +65,31 @@
 .palette-item:active { cursor: grabbing; }
 .palette-item .pi-icon { font-size: 22px; }
 .palette-item .pi-name { font-size: 14px; }
+
+/* --- בורר צבע חוט --- */
+.library h3.wire-h { margin-top: 16px; }
+.wire-colors {
+  display: grid; grid-template-columns: repeat(6, 1fr);
+  gap: 6px; margin-bottom: 8px;
+}
+.wire-swatch {
+  width: 100%; aspect-ratio: 1; padding: 0;
+  background: var(--c, #888);
+  border: 2px solid var(--border); border-radius: 6px;
+  cursor: pointer; position: relative;
+  transition: transform .1s, border-color .1s;
+}
+.wire-swatch:hover { transform: scale(1.1); }
+.wire-swatch.active { border-color: #fff; box-shadow: 0 0 0 2px var(--accent); }
+.wire-swatch.custom {
+  display: flex; align-items: center; justify-content: center;
+  background: var(--panel-2); color: var(--text-dim); font-size: 16px; font-weight: 700;
+  overflow: hidden;
+}
+.wire-swatch.custom input[type="color"] {
+  position: absolute; inset: 0; opacity: 0; cursor: pointer; border: none;
+}
+.wire-hint { font-size: 11px; color: var(--text-dim); line-height: 1.5; }
 
 /* --- קנבס (מרכז) — רקע לבן עם רשת אפורה בהירה --- */
 .canvas-wrap {
@@ -165,3 +195,35 @@
   font-weight: 700;
 }
 .bit.high { background: var(--pin-high); }
+
+/* טרמינל UART */
+.uart-out {
+  background: #0b1118; border: 1px solid var(--border); border-radius: 6px;
+  padding: 8px 10px; font-family: var(--mono); font-size: 13px; color: #7ee0a0;
+  height: 84px; overflow-y: auto; white-space: pre-wrap; word-break: break-word;
+}
+.uart-out:empty::before { content: "פלט הבקר יופיע כאן…"; color: var(--text-dim); }
+.uart-in-row { display: flex; gap: 6px; margin-top: 6px; }
+.uart-in-row input {
+  flex: 1; background: #0c1118; color: var(--text); border: 1px solid var(--border);
+  border-radius: 6px; padding: 6px 9px; font-size: 13px;
+}
+.uart-in-row input:focus { outline: none; border-color: var(--accent); }
+
+/* כותרת פאנל הרגיסטרים + כפתור הצג-הכול */
+.reg-head { display: flex; align-items: center; justify-content: space-between; margin-bottom: 10px; }
+.reg-head h3 { margin: 0; }
+.reg-toggle {
+  font-size: 12px; padding: 4px 10px; border-radius: 6px;
+  background: var(--panel-2); color: var(--text-dim); border: 1px solid var(--border);
+}
+.reg-toggle.on { background: var(--accent-2); color: #fff; border-color: var(--accent); }
+/* כותרת קטגוריה ברשימת הרגיסטרים */
+.reg-cat {
+  font-size: 11px; color: var(--text-dim); text-transform: uppercase; letter-spacing: .5px;
+  margin: 8px 0 2px; padding-bottom: 3px; border-bottom: 1px solid var(--border);
+}
+.reg-cat:first-child { margin-top: 0; }
+/* שורת SFR מסוג ביט בודד */
+.reg-row.reg-bit { grid-template-columns: 1fr auto; }
+.reg-row.reg-bit .reg-name { color: #b9c6d3; }

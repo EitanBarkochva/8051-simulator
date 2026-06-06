@@ -283,6 +283,29 @@ begin
 end $$;
 
 -- ============================================================
+--  RPC: המורה מוסיף תלמיד לכיתתו לפי אימייל (SECURITY DEFINER)
+--  בודק שהקורא הוא מורה הכיתה, מאתר את הפרופיל לפי אימייל, ומשייך.
+-- ============================================================
+create or replace function public.add_student_to_class(p_class_id uuid, p_email text)
+  returns table (id uuid, full_name text, email text)
+  language plpgsql security definer set search_path = public as $$
+declare sid uuid;
+begin
+  if not public.teaches_class(p_class_id) then
+    raise exception 'אין לך הרשאה לנהל כיתה זו';
+  end if;
+  select pr.id into sid from public.profiles pr
+    where lower(pr.email) = lower(trim(p_email)) limit 1;
+  if sid is null then
+    raise exception 'לא נמצא משתמש עם האימייל הזה. ודא שהתלמיד נרשם לאתר.';
+  end if;
+  insert into public.class_members (class_id, student_id)
+    values (p_class_id, sid) on conflict do nothing;
+  return query
+    select pr.id, pr.full_name, pr.email from public.profiles pr where pr.id = sid;
+end $$;
+
+-- ============================================================
 --  VIEWS נוחות: "טבלת תלמידים" ו"טבלת מורים"
 --  (security_invoker → ה-RLS של profiles חל גם דרך ה-view)
 -- ============================================================
