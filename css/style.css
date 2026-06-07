@@ -73,3 +73,40 @@ h1, h2, h3 { font-weight: 600; }
 @media (max-width: 680px) {
   .site-nav { flex-wrap: wrap; height: auto; padding: 8px 12px; }
 }
+
+/* ===== בורר צבע רקע (כפתור צף) ===== */
+.theme-fab {
+  position: fixed; bottom: 16px; left: 16px; z-index: 9999;
+  width: 42px; height: 42px; border-radius: 50%;
+  background: var(--panel); border: 1px solid var(--border);
+  font-size: 19px; line-height: 1; cursor: pointer;
+  box-shadow: 0 3px 10px rgba(0,0,0,.35);
+}
+.theme-fab:hover { border-color: var(--accent); }
+.theme-pop {
+  position: fixed; bottom: 66px; left: 16px; z-index: 9999;
+  width: 210px; padding: 14px;
+  background: var(--panel); border: 1px solid var(--border);
+  border-radius: 12px; box-shadow: 0 6px 24px rgba(0,0,0,.4);
+}
+.theme-title { font-size: 13px; color: var(--text-dim); margin-bottom: 10px; }
+.theme-swatches { display: grid; grid-template-columns: repeat(5, 1fr); gap: 7px; margin-bottom: 12px; }
+.theme-sw {
+  width: 100%; aspect-ratio: 1; padding: 0; cursor: pointer;
+  border: 2px solid var(--border); border-radius: 7px; transition: transform .1s;
+}
+.theme-sw:hover { transform: scale(1.12); border-color: var(--accent); }
+.theme-custom {
+  display: flex; align-items: center; justify-content: space-between; gap: 8px;
+  font-size: 13px; color: var(--text); margin-bottom: 12px;
+}
+.theme-custom input[type="color"] {
+  width: 46px; height: 28px; padding: 0; border: 1px solid var(--border);
+  border-radius: 6px; background: none; cursor: pointer;
+}
+.theme-reset {
+  width: 100%; font-size: 13px; padding: 7px;
+  background: var(--panel-2); color: var(--text-dim);
+  border: 1px solid var(--border); border-radius: 7px; cursor: pointer;
+}
+.theme-reset:hover { color: var(--text); }
