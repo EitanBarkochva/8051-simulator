@@ -159,9 +159,32 @@ window.Wiring = (function () {
     return null;
   }
 
+  /** צובע רגל/פין/חור בצבע החוט המחובר אליו, כדי שיהיה ברור לאן חיברת */
+  function colorEndpoint(el, color) {
+    if (!el) return;
+    el.classList.add("wire-connected");
+    if (el.tagName.toLowerCase() === "circle") {        // רגלי SVG (LED/7seg/זמזם) + טרמינלי סוללה
+      el.style.fill = color; el.style.stroke = color;
+    } else if (el.classList.contains("pin")) {          // פיני ה-8051 (מכילים מספר) — מסגרת+זוהר
+      el.style.outline = "2px solid " + color;
+      el.style.boxShadow = "0 0 6px " + color;
+    } else {                                             // רגלי div/span (כפתור/מנוע/פוט') + חורי ברידבורד
+      el.style.background = color;
+      el.style.boxShadow = "0 0 5px " + color;
+    }
+  }
+  function clearEndpointColors() {
+    if (!canvasEl) return;
+    canvasEl.querySelectorAll(".wire-connected").forEach((el) => {
+      el.classList.remove("wire-connected");
+      ["background", "box-shadow", "fill", "stroke", "outline"].forEach((p) => el.style.removeProperty(p));
+    });
+  }
+
   function redraw() {
     if (!svg) return;
     [...svg.querySelectorAll(".wire:not(.preview)")].forEach((l) => l.remove());
+    clearEndpointColors();                  // אפס צבעי רגליים לפני צביעה מחדש
     // הסר חוטים שאיבדו קצה
     for (let i = wires.length - 1; i >= 0; i--) { if (!elFor(wires[i].a) || !elFor(wires[i].b)) wires.splice(i, 1); }
 
@@ -170,6 +193,7 @@ window.Wiring = (function () {
       if (!ea || !eb) return;
       const A = center(ea), B = center(eb);
       const color = w.color || activeColor;
+      colorEndpoint(ea, color); colorEndpoint(eb, color);   // צבע את שתי הרגליים בצבע החוט
       const path = document.createElementNS(SVGNS, "path");
       path.setAttribute("class", "wire");
       path.setAttribute("d", pathD(A, B));
