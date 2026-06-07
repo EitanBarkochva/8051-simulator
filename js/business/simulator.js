@@ -198,7 +198,8 @@ window.Simulator = (function () {
           case "jump": pc = ins.target; break;
           case "jumpIfFalse": pc = evalExpr(ins.expr) ? pc + 1 : ins.target; break;
           case "delay": {
-            const ms = Math.max(0, evalExpr(ins.expr) | 0);
+            let ms = Math.max(0, evalExpr(ins.expr) | 0);
+            if (ins.us) ms = Math.round(ms / 1000);   // delay_us → אלפיות
             pc++;
             Canvas.refreshAll();
             timer = setTimeout(step, ms);

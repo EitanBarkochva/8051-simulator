@@ -4,9 +4,9 @@
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>8051 Simulator — סביבת עבודה</title>
-  <link rel="stylesheet" href="../css/style.css?v=20260608">
-  <link rel="stylesheet" href="../css/simulator.css?v=20260608">
-  <link rel="stylesheet" href="../css/components.css?v=20260608">
+  <link rel="stylesheet" href="../css/style.css?v=20260609">
+  <link rel="stylesheet" href="../css/simulator.css?v=20260609">
+  <link rel="stylesheet" href="../css/components.css?v=20260609">
   <!-- מניעת מטמון של הדפדפן כדי שעדכונים יוצגו מיד -->
   <meta http-equiv="Cache-Control" content="no-cache, no-store, must-revalidate">
   <meta http-equiv="Pragma" content="no-cache">
@@ -100,12 +100,18 @@
       <div class="wire-hint">בחר צבע ואז מתח חוט · קליק על חוט קיים = צביעה מחדש · קליק ימני = מחיקה</div>
     </aside>
 
+    <!-- מפריד הניתן לגרירה (ספרייה ↔ קנבס) -->
+    <div class="vsplit" data-split="lib" title="גרור כדי לשנות את רוחב הספרייה"></div>
+
     <!-- ===== קנבס (מרכז) ===== -->
     <main class="canvas-wrap">
       <div class="canvas" id="canvas">
         <div class="canvas-hint">גרור LED לכאן 👈<br>לחץ על פין בשבב ואז על הטרמינל של ה-LED כדי למתוח חוט</div>
       </div>
     </main>
+
+    <!-- מפריד הניתן לגרירה (קנבס ↔ צד ימין) -->
+    <div class="vsplit" data-split="side" title="גרור כדי לשנות את רוחב פאנל הקוד"></div>
 
     <!-- ===== צד ימין: קוד + רגיסטרים ===== -->
     <aside class="side">
@@ -148,15 +154,15 @@
   </div>
 
   <!-- ===== business logic ===== -->
-  <script src="../js/business/registers.js?v=20260608"></script>
-  <script src="../js/business/codeParser.js?v=20260608"></script>
-  <script src="../js/business/components.js?v=20260608"></script>
-  <script src="../js/business/simulator.js?v=20260608"></script>
-  <script src="../js/business/checker.js?v=20260608"></script>
+  <script src="../js/business/registers.js?v=20260609"></script>
+  <script src="../js/business/codeParser.js?v=20260609"></script>
+  <script src="../js/business/components.js?v=20260609"></script>
+  <script src="../js/business/simulator.js?v=20260609"></script>
+  <script src="../js/business/checker.js?v=20260609"></script>
   <!-- ===== UI ===== -->
-  <script src="../js/ui/canvas.js?v=20260608"></script>
-  <script src="../js/ui/wiring.js?v=20260608"></script>
-  <script src="../js/ui/dragDrop.js?v=20260608"></script>
+  <script src="../js/ui/canvas.js?v=20260609"></script>
+  <script src="../js/ui/wiring.js?v=20260609"></script>
+  <script src="../js/ui/dragDrop.js?v=20260609"></script>
   <!-- ===== db ===== -->
   <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
   <script src="../js/db/config.js"></script>
@@ -219,6 +225,33 @@
         onMove: () => Wiring.redraw(),
       });
       DragDrop.init(paletteEl, canvasEl);
+
+      // --- שינוי גודל חלונות (גרירת המפרידים) ---
+      (function () {
+        const shell = document.querySelector(".sim-shell");
+        const cur = (name, def) => parseInt(getComputedStyle(shell).getPropertyValue(name)) || def;
+        document.querySelectorAll(".vsplit").forEach((sp) => {
+          sp.addEventListener("mousedown", (e) => {
+            e.preventDefault();
+            sp.classList.add("dragging");
+            const which = sp.dataset.split, startX = e.clientX;
+            const lib0 = cur("--lib-w", 200), side0 = cur("--side-w", 360);
+            function move(ev) {
+              const dx = ev.clientX - startX;
+              if (which === "lib") shell.style.setProperty("--lib-w", Math.min(520, Math.max(120, lib0 + dx)) + "px");
+              else                 shell.style.setProperty("--side-w", Math.min(720, Math.max(240, side0 - dx)) + "px");
+              if (window.Wiring && Wiring.redraw) Wiring.redraw();   // החוטים עוקבים אחרי שינוי הגודל
+            }
+            function up() {
+              sp.classList.remove("dragging");
+              document.removeEventListener("mousemove", move);
+              document.removeEventListener("mouseup", up);
+            }
+            document.addEventListener("mousemove", move);
+            document.addEventListener("mouseup", up);
+          });
+        });
+      })();
 
       // --- בורר צבע חוט ---
       (function () {

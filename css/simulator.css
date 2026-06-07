@@ -1,13 +1,18 @@
 /* ===== layout של סביבת העבודה: 3 עמודות ===== */
 .sim-shell {
   display: grid;
-  grid-template-columns: 200px 1fr 360px;
+  grid-template-columns: var(--lib-w, 200px) 6px 1fr 6px var(--side-w, 360px);
   grid-template-rows: 52px 1fr;
   grid-template-areas:
-    "topbar topbar topbar"
-    "library canvas side";
+    "topbar topbar  topbar topbar  topbar"
+    "library splitL canvas splitR side";
   height: 100vh;
 }
+/* מפרידים הניתנים לגרירה — להגדלה/הקטנה של החלונות */
+.vsplit { background: var(--border); cursor: col-resize; transition: background .12s; }
+.vsplit:hover, .vsplit.dragging { background: var(--accent); }
+.vsplit[data-split="lib"]  { grid-area: splitL; }
+.vsplit[data-split="side"] { grid-area: splitR; }
 
 /* --- topbar --- */
 .topbar {

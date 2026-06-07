@@ -226,7 +226,9 @@ window.CodeParser = (function () {
         if (!isPunc(")")) { args.push(parseExpr()); while (isPunc(",")) { next(); args.push(parseExpr()); } }
         expectPunc(")");
         if (eatSemi) expectPunc(";");
-        if (name === "delay") return { type: "delay", expr: args[0] || { type: "num", value: 0 }, line };
+        // השהיות: delay/delay_ms (אלפית שנייה) · delay_us (מיליונית שנייה)
+        if (name === "delay" || name === "delay_ms" || name === "delay_us")
+          return { type: "delay", expr: args[0] || { type: "num", value: 0 }, us: name === "delay_us", line };
         return { type: "callStmt", call: { type: "call", name, args }, line };
       }
 
@@ -392,7 +394,7 @@ window.CodeParser = (function () {
         case "block": node.body.forEach(comp); break;
         case "decl":  emit({ op: "decl", name: node.name, isArray: !!node.isArray, size: node.size || null, initList: node.initList || null, init: node.init || null, line: node.line }); break;
         case "assign": emit({ op: "assign", target: normTarget(node.target), expr: node.expr, line: node.line }); break;
-        case "delay": emit({ op: "delay", expr: node.expr, line: node.line }); break;
+        case "delay": emit({ op: "delay", expr: node.expr, us: !!node.us, line: node.line }); break;
         case "callStmt": emit({ op: "callStmt", call: node.call, line: node.line }); break;
         case "return": emit({ op: "return", expr: node.expr || null, line: node.line }); break;
 
