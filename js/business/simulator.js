@@ -182,6 +182,63 @@ window.Simulator = (function () {
     if (running) { running = false; emit("stopped"); }
   }
 
+  /* ---------- מצב דיבאג: צעד-אחר-צעד ---------- */
+  function snapVars() {
+    const o = {};
+    for (const k in scope.vars) { const v = scope.vars[k]; if (typeof v === "number") o[k] = v; }
+    return o;
+  }
+  /** מתחיל ריצת דיבאג (לא רץ אוטומטית — ממתין ל-debugStep) */
+  function debugStart(code, onStatus) {
+    stop();
+    statusCb = onStatus || statusCb;
+    const compiled = CodeParser.compile(code);
+    if (compiled.errors.length) { emit("error", compiled.errors); return { errors: compiled.errors }; }
+    program = compiled.instructions;
+    isrPrograms = compiled.isrs || {};
+    functions = compiled.functions || {};
+    callDepth = 0; pc = 0; scope = { vars: {} }; sfr = {}; rxQueue = []; inISR = false;
+    prevP3 = Registers.get("P3"); running = true;
+    emit("running");
+    Canvas.refreshAll();
+    return { errors: [], line: program[0] && program[0].line, vars: {} };
+  }
+  /** מבצע שורת-מקור אחת. מחזיר {done, line, vars, error?} */
+  function debugStep() {
+    if (!running || !program) return { done: true };
+    const startLine = (program[pc] && program[pc].line) || 0;
+    let guard = 200000;
+    try {
+      while (pc < program.length) {
+        if (guard-- <= 0) break;
+        const ins = program[pc];
+        switch (ins.op) {
+          case "decl":
+          case "assign": execNonControl(ins); pc++; break;
+          case "callStmt": evalExpr(ins.call); pc++; break;
+          case "delay": pc++; break;                               // בדיבאג מדלגים על ההשהיה
+          case "return": Canvas.refreshAll(); running = false; emit("done"); return { done: true, vars: snapVars() };
+          case "jump": pc = ins.target; break;
+          case "jumpIfFalse": pc = evalExpr(ins.expr) ? pc + 1 : ins.target; break;
+          case "jumpIfTrue": pc = evalExpr(ins.expr) ? ins.target : pc + 1; break;
+          default: pc++;
+        }
+        const nextLine = program[pc] && program[pc].line;          // עצור כשמגיעים לשורת-מקור חדשה
+        if (nextLine && nextLine !== startLine &&
+            (ins.op === "assign" || ins.op === "decl" || ins.op === "callStmt" || ins.op === "delay")) break;
+      }
+    } catch (e) {
+      running = false;
+      const ln = program[pc] && program[pc].line;
+      emit("error", [(ln ? `שורה ${ln}: ` : "") + e.message]);
+      return { done: true, error: e.message };
+    }
+    Canvas.refreshAll();
+    const done = pc >= program.length;
+    if (done) { running = false; emit("done"); }
+    return { done, line: program[pc] && program[pc].line, vars: snapVars() };
+  }
+
   function step() {
     if (!running) return;
     let budget = STEP_BUDGET;
@@ -197,6 +254,7 @@ window.Simulator = (function () {
           case "return": Canvas.refreshAll(); running = false; emit("done"); return;
           case "jump": pc = ins.target; break;
           case "jumpIfFalse": pc = evalExpr(ins.expr) ? pc + 1 : ins.target; break;
+          case "jumpIfTrue": pc = evalExpr(ins.expr) ? ins.target : pc + 1; break;
           case "delay": {
             let ms = Math.max(0, evalExpr(ins.expr) | 0);
             if (ins.us) ms = Math.round(ms / 1000);   // delay_us → אלפיות
@@ -255,6 +313,7 @@ window.Simulator = (function () {
         case "return": return ins.expr ? evalExpr(ins.expr) : 0;
         case "jump": p = ins.target; break;
         case "jumpIfFalse": p = evalExpr(ins.expr) ? p + 1 : ins.target; break;
+        case "jumpIfTrue": p = evalExpr(ins.expr) ? ins.target : p + 1; break;
         case "delay": p++; break;   // אין השהיות בתוך ISR/פונקציה
         default: p++;
       }
@@ -342,6 +401,7 @@ window.Simulator = (function () {
 
   return {
     run, stop, getSFRs: () => ({ ...sfr }),
+    debugStart, debugStep,                        // מצב דיבאג (צעד-אחר-צעד)
     onSerialOut: (fn) => { serialOutCb = fn; },   // הרשמה לפלט UART (טרמינל)
     serialInput,                                  // הזרקת קלט UART מהטרמינל
     get running() { return running; },

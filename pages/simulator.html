@@ -4,14 +4,19 @@
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>8051 Simulator — סביבת עבודה</title>
-  <link rel="stylesheet" href="../css/style.css?v=20260610">
-  <link rel="stylesheet" href="../css/simulator.css?v=20260610">
-  <link rel="stylesheet" href="../css/components.css?v=20260610">
+  <link rel="stylesheet" href="../css/style.css?v=20260615">
+  <link rel="stylesheet" href="../css/simulator.css?v=20260615">
+  <link rel="stylesheet" href="../css/components.css?v=20260615">
   <!-- מניעת מטמון של הדפדפן כדי שעדכונים יוצגו מיד -->
   <meta http-equiv="Cache-Control" content="no-cache, no-store, must-revalidate">
   <meta http-equiv="Pragma" content="no-cache">
   <meta http-equiv="Expires" content="0">
-  <script src="../js/ui/theme.js?v=20260610"></script>
+  <script src="../js/ui/theme.js?v=20260615"></script>
+  <!-- CodeMirror — הדגשת תחביר ומספרי שורות לעורך (עם נפילה ל-textarea אם ה-CDN חסום) -->
+  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/codemirror/5.65.16/codemirror.min.css">
+  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/codemirror/5.65.16/theme/dracula.min.css">
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/codemirror/5.65.16/codemirror.min.js"></script>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/codemirror/5.65.16/mode/clike/clike.min.js"></script>
 </head>
 <body>
   <div class="sim-shell">
@@ -22,6 +27,7 @@
       <a href="home.html" class="topnav-link" title="תפריט ראשי">🏠 ראשי</a>
       <input id="project-name" class="project-name" placeholder="שם הפרויקט" value="פרויקט חדש">
       <button id="btn-save" class="primary">💾 שמור</button>
+      <button id="btn-share" title="העתק קישור לשיתוף המעגל">🔗 שתף</button>
       <span class="spacer"></span>
       <span class="status" id="status">מוכן</span>
     </header>
@@ -32,6 +38,10 @@
       <div class="palette-item" data-type="led">
         <span class="pi-icon">💡</span>
         <span class="pi-name">LED</span>
+      </div>
+      <div class="palette-item" data-type="rgbled">
+        <span class="pi-icon">🌈</span>
+        <span class="pi-name">LED RGB</span>
       </div>
       <div class="palette-item" data-type="button">
         <span class="pi-icon">🔘</span>
@@ -118,7 +128,12 @@
     <aside class="side">
       <div class="side-section" id="exercise-panel" style="display:none;"></div>
       <div class="side-section">
-        <h3>עורך קוד</h3>
+        <div class="editor-head">
+          <h3>עורך קוד</h3>
+          <select id="example-select" class="example-select" title="טען דוגמת קוד מוכנה">
+            <option value="">📋 טען דוגמה…</option>
+          </select>
+        </div>
         <textarea id="code-editor" spellcheck="false">void main() {
   // כתוב את הקוד שלך כאן
 
@@ -129,8 +144,11 @@
         <div class="run-row">
           <button class="primary" id="btn-run">▶ הרץ</button>
           <button id="btn-stop" disabled>⏹ עצור</button>
+          <button id="btn-debug" title="הרץ צעד-אחר-צעד">🐞 דבאג</button>
+          <button id="btn-step" style="display:none">⏭ צעד</button>
           <button id="btn-reset">איפוס</button>
         </div>
+        <div id="watch" class="watch" style="display:none"></div>
         <div id="console"></div>
       </div>
 
@@ -155,15 +173,17 @@
   </div>
 
   <!-- ===== business logic ===== -->
-  <script src="../js/business/registers.js?v=20260610"></script>
-  <script src="../js/business/codeParser.js?v=20260610"></script>
-  <script src="../js/business/components.js?v=20260610"></script>
-  <script src="../js/business/simulator.js?v=20260610"></script>
-  <script src="../js/business/checker.js?v=20260610"></script>
+  <script src="../js/business/examples.js?v=20260615"></script>
+  <script src="../js/business/builtinExercises.js?v=20260615"></script>
+  <script src="../js/business/registers.js?v=20260615"></script>
+  <script src="../js/business/codeParser.js?v=20260615"></script>
+  <script src="../js/business/components.js?v=20260615"></script>
+  <script src="../js/business/simulator.js?v=20260615"></script>
+  <script src="../js/business/checker.js?v=20260615"></script>
   <!-- ===== UI ===== -->
-  <script src="../js/ui/canvas.js?v=20260610"></script>
-  <script src="../js/ui/wiring.js?v=20260610"></script>
-  <script src="../js/ui/dragDrop.js?v=20260610"></script>
+  <script src="../js/ui/canvas.js?v=20260615"></script>
+  <script src="../js/ui/wiring.js?v=20260615"></script>
+  <script src="../js/ui/dragDrop.js?v=20260615"></script>
   <!-- ===== db ===== -->
   <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
   <script src="../js/db/config.js"></script>
@@ -215,7 +235,24 @@
         if (html !== lastRegHtml) { regGrid.innerHTML = html; lastRegHtml = html; }
       }
 
-      const editorEl  = document.getElementById("code-editor");
+      // עורך קוד: CodeMirror (הדגשת תחביר + מספרי שורות) עם נפילה ל-textarea
+      const _ta = document.getElementById("code-editor");
+      let editorEl, _cm = null;
+      if (window.CodeMirror) {
+        _cm = CodeMirror.fromTextArea(_ta, {
+          mode: "text/x-csrc", theme: "dracula",
+          lineNumbers: true, matchBrackets: true, indentUnit: 2, tabSize: 2, direction: "ltr",
+        });
+        _cm.setSize("100%", 200);
+        window.addEventListener("resize", () => _cm.refresh());
+        editorEl = {                                   // פרוקסי שמדמה textarea (.value + input)
+          get value() { return _cm.getValue(); },
+          set value(v) { _cm.setValue(v); },
+          addEventListener(ev, fn) { if (ev === "input") _cm.on("change", fn); },
+        };
+      } else {
+        editorEl = _ta;   // נפילה: ה-CDN לא נטען → textarea רגיל
+      }
       const nameEl    = document.getElementById("project-name");
       let currentId   = null;   // id הפרויקט הנוכחי (null = עוד לא נשמר)
 
@@ -223,9 +260,21 @@
       Wiring.init(canvasEl);
       Canvas.init(canvasEl, {
         onRegisterChange: () => { renderRegisters(); Wiring.redraw(); },
-        onMove: () => Wiring.redraw(),
+        onMove: () => { Wiring.redraw(); scheduleAutosave(); },
       });
       DragDrop.init(paletteEl, canvasEl);
+
+      // --- שמירה אוטומטית מקומית (גם בלי התחברות) ---
+      const AUTOSAVE_KEY = "sim8051-autosave";
+      let autosaveOn = false, autosaveTimer = null;
+      function doAutosave() {
+        if (!autosaveOn) return;
+        try { localStorage.setItem(AUTOSAVE_KEY, JSON.stringify(serializeCircuit())); } catch (e) {}
+      }
+      function scheduleAutosave() { if (autosaveOn) { clearTimeout(autosaveTimer); autosaveTimer = setTimeout(doAutosave, 600); } }
+      function loadAutosave() { try { const s = localStorage.getItem(AUTOSAVE_KEY); return s ? JSON.parse(s) : null; } catch (e) { return null; } }
+      setInterval(doAutosave, 3000);   // רשת ביטחון (גם להוספת רכיבים)
+      editorEl.addEventListener("input", scheduleAutosave);
 
       // --- שינוי גודל חלונות (גרירת המפרידים) ---
       (function () {
@@ -245,6 +294,7 @@
             }
             function up() {
               sp.classList.remove("dragging");
+              if (_cm) _cm.refresh();
               document.removeEventListener("mousemove", move);
               document.removeEventListener("mouseup", up);
             }
@@ -315,10 +365,23 @@
       const projId  = params.get("project");
       const exId    = params.get("exercise");
       const asgId   = params.get("assignment");
+      const bexId   = params.get("bex");   // תרגיל מובנה
 
       async function initWorkspace() {
-        await Auth.requireAuth();   // ודא משתמש מחובר
-        const existing   = projId ? await ProjectService.get(projId) : null;
+        await Auth.getUser();   // מצב אורח מותר — לא מפנים ל-login
+
+        // תרגיל מובנה (?bex=ID) — ללא צורך בשרת/התחברות
+        const builtin = bexId && (window.BuiltinExercises || []).find((x) => x.id === bexId);
+        if (builtin) {
+          newCircuit();
+          editorEl.value = builtin.starterCode || "";
+          nameEl.value = "תרגיל: " + builtin.title;
+          renderExercisePanel(builtin, null);
+          return;
+        }
+
+        let existing = null;
+        try { existing = projId ? await ProjectService.get(projId) : null; } catch (e) {}
         const exercise   = exId ? await ExerciseService.get(exId) : null;
         const assignment = (asgId && DB.isSupabase) ? await LMS.Assignments.get(asgId) : null;
 
@@ -327,7 +390,30 @@
           nameEl.value = existing.name;
           restoreCircuit(existing.data || {});
           statusEl.textContent = "נטען";
-          return;
+          return;   // פרויקט שמור — בלי autosave מקומי
+        }
+
+        // מעגל משותף מקישור (?c=...)
+        const shared = params.get("c");
+        if (shared) {
+          try {
+            restoreCircuit(JSON.parse(decodeURIComponent(atob(shared))));
+            autosaveOn = true;            // אפשר לערוך — ייׁשמר מקומית כעותק
+            statusEl.textContent = "נטען מקישור משותף";
+            history.replaceState(null, "", location.pathname);   // נקה את ה-URL
+            return;
+          } catch (e) { statusEl.textContent = "הקישור פגום"; }
+        }
+
+        // מצב חופשי: שחזר עבודה מקומית אם קיימת
+        if (!exercise && !assignment) {
+          const auto = loadAutosave();
+          if (auto && (auto.components || []).length) {
+            restoreCircuit(auto);
+            autosaveOn = true;
+            statusEl.textContent = "שוחזר אוטומטית";
+            return;
+          }
         }
 
         newCircuit();
@@ -340,6 +426,8 @@
           editorEl.value = exercise.starterCode || "";
           nameEl.value = "פתרון: " + exercise.title;
           renderExercisePanel(exercise, null);
+        } else {
+          autosaveOn = true;   // מעגל חופשי חדש → הפעל שמירה אוטומטית
         }
       }
       // ממיר שורת exercises מ-Supabase למבנה שה-Checker מצפה לו
@@ -388,12 +476,30 @@
 
       // --- שמירה ---
       document.getElementById("btn-save").addEventListener("click", async () => {
+        // מצב אורח: שמירה לענן דורשת התחברות
+        if (DB.isSupabase && !(await Auth.getUser())) {
+          if (confirm("כדי לשמור את הפרויקט בענן צריך להתחבר. לעבור לדף ההתחברות?\n(העבודה שלך נשמרת מקומית בכל מקרה)")) location.href = "login.html";
+          return;
+        }
         statusEl.textContent = "שומר…";
         try {
           currentId = await ProjectService.save({ id: currentId, name: nameEl.value.trim() || "פרויקט ללא שם", data: serializeCircuit() });
           history.replaceState(null, "", "?project=" + currentId);
+          autosaveOn = false;   // מעכשיו זה פרויקט שמור בענן
           statusEl.textContent = "נשמר ✓";
         } catch (e) { statusEl.textContent = "שגיאה בשמירה: " + e.message; }
+      });
+
+      // --- שיתוף המעגל בקישור ---
+      document.getElementById("btn-share").addEventListener("click", async () => {
+        const enc = btoa(encodeURIComponent(JSON.stringify(serializeCircuit())));
+        const url = location.origin + location.pathname + "?c=" + enc;
+        try {
+          await navigator.clipboard.writeText(url);
+          statusEl.textContent = "🔗 הקישור הועתק ללוח";
+        } catch (e) {
+          prompt("העתק את קישור השיתוף:", url);
+        }
       });
 
       // --- בקרת ריצה ---
@@ -427,7 +533,45 @@
       }
 
       btnRun.addEventListener("click", () => Simulator.run(editorEl.value, onStatus));
-      btnStop.addEventListener("click", () => Simulator.stop());
+      btnStop.addEventListener("click", () => { Simulator.stop(); endDebug(); });
+
+      // --- מצב דיבאג: צעד-אחר-צעד + צפייה במשתנים ---
+      const btnDebug = document.getElementById("btn-debug");
+      const btnStep  = document.getElementById("btn-step");
+      const watchEl  = document.getElementById("watch");
+      let dbgLine = null;
+      function clearDbgLine() { if (_cm && dbgLine != null) { _cm.removeLineClass(dbgLine, "background", "cm-debug-line"); dbgLine = null; } }
+      function showDbgLine(line) {
+        clearDbgLine();
+        if (_cm && line) { dbgLine = line - 1; _cm.addLineClass(dbgLine, "background", "cm-debug-line"); _cm.scrollIntoView({ line: dbgLine, ch: 0 }); }
+      }
+      function showWatch(vars, line, done) {
+        const e = Object.entries(vars || {});
+        watchEl.style.display = "block";
+        watchEl.innerHTML =
+          `<div class="watch-head">🐞 דיבאג ${done ? "— הסתיים ✓" : (line ? "· שורה " + line : "")}</div>` +
+          (e.length ? e.map(([k, v]) => `<span class="watch-var">${k} = ${v} <small>(0x${(v & 0xFF).toString(16).toUpperCase()})</small></span>`).join("")
+                    : `<span class="watch-empty">— אין משתנים עדיין —</span>`);
+      }
+      function endDebug() { btnStep.style.display = "none"; btnRun.disabled = false; btnDebug.disabled = false; clearDbgLine(); }
+
+      btnDebug.addEventListener("click", () => {
+        const res = Simulator.debugStart(editorEl.value, onStatus);
+        if (res.errors && res.errors.length) return;     // onStatus כבר הציג שגיאות
+        document.getElementById("uart-out").textContent = "";
+        if (Canvas.displayResetAll) Canvas.displayResetAll();
+        renderRegisters();
+        btnStep.style.display = "inline-block";
+        btnRun.disabled = true; btnDebug.disabled = true; btnStop.disabled = false;
+        showDbgLine(res.line); showWatch(res.vars, res.line, false);
+      });
+      btnStep.addEventListener("click", () => {
+        const r = Simulator.debugStep();
+        renderRegisters();
+        showWatch(r.vars, r.line, r.done);
+        if (r.done) { endDebug(); btnStop.disabled = true; }
+        else showDbgLine(r.line);
+      });
 
       // --- טרמינל UART ---
       const uartOut = document.getElementById("uart-out");
@@ -445,9 +589,32 @@
       document.getElementById("uart-send").addEventListener("click", sendUart);
       uartIn.addEventListener("keydown", (e) => { if (e.key === "Enter") sendUart(); });
 
+      // --- בורר דוגמאות קוד ---
+      (function () {
+        const sel = document.getElementById("example-select");
+        if (!sel || !window.Examples) return;
+        Examples.forEach((ex, i) => {
+          const o = document.createElement("option");
+          o.value = String(i); o.textContent = ex.name;
+          sel.appendChild(o);
+        });
+        sel.addEventListener("change", () => {
+          const ex = Examples[+sel.value];
+          sel.value = "";
+          if (!ex) return;
+          const cur = editorEl.value.trim();
+          const skeleton = cur === "" || cur.indexOf("כתוב את הקוד שלך כאן") >= 0;
+          if (!skeleton && !confirm("לטעון את הדוגמה? הקוד הנוכחי יוחלף.")) return;
+          editorEl.value = ex.code;
+          if (ex.hint) consoleEl.innerHTML = `<div class="hint-line">💡 ${ex.hint}</div>`;
+        });
+      })();
+
       // --- איפוס ---
       document.getElementById("btn-reset").addEventListener("click", () => {
         Simulator.stop();
+        endDebug();
+        watchEl.style.display = "none";
         Registers.reset();
         Components.assertAllInputs();   // שמור על ערכי הקלט אחרי איפוס
         consoleEl.innerHTML = "";

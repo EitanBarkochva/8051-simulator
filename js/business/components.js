@@ -8,6 +8,7 @@ window.Components = (function () {
   // קטלוג סוגי הרכיבים
   const CATALOG = {
     led:      { name: "LED",        icon: "💡", color: "#ffcc00" },
+    rgbled:   { name: "LED RGB",    icon: "🌈" },   // 3 ערוצים R/G/B + משותף
     buzzer:   { name: "זמזם",       icon: "🔔" },   // פלט דיגיטלי
     button:   { name: "כפתור",      icon: "🔘" },   // קלט דיגיטלי
     slideswitch: { name: "מפסק הזזה", icon: "🎚️", input: true }, // מתג נעילה (0/1)

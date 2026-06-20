@@ -16,7 +16,7 @@
 window.CodeParser = (function () {
 
   /* ---------------- Lexer ---------------- */
-  const PUNC = new Set(["(", ")", "{", "}", "[", "]", ";", ",", "."]);
+  const PUNC = new Set(["(", ")", "{", "}", "[", "]", ";", ",", ".", ":"]);
   const OPS3 = ["<<=", ">>="];
   const OPS2 = ["==","!=","<=",">=","&&","||","<<",">>","++","--","+=","-=","*=","/=","%=","&=","|=","^="];
 
@@ -152,6 +152,9 @@ window.CodeParser = (function () {
       if (isKw("if")) return parseIf();
       if (isKw("while")) return parseWhile();
       if (isKw("for")) return parseFor();
+      if (isKw("switch")) return parseSwitch();
+      if (isKw("break")) { const line = next().line; expectPunc(";"); return { type: "break", line }; }
+      if (isKw("continue")) { const line = next().line; expectPunc(";"); return { type: "continue", line }; }
       if (isKw("return")) {
         const line = next().line;
         const expr = isPunc(";") ? null : parseExpr();
@@ -213,6 +216,28 @@ window.CodeParser = (function () {
       const incr = isPunc(")") ? null : parseSimpleStatement(false);
       expectPunc(")");
       return { type: "for", init, cond, incr, body: parseStatement(), line };
+    }
+
+    function parseSwitch() {
+      const line = next().line;            // 'switch'
+      expectPunc("("); const expr = parseExpr(); expectPunc(")");
+      expectPunc("{");
+      const cases = [];
+      let current = null;
+      while (!isPunc("}") && !atEnd()) {
+        if (isKw("case")) {
+          next(); const value = parseExpr(); expectPunc(":");
+          current = { value, body: [] }; cases.push(current);
+        } else if (isKw("default")) {
+          next(); expectPunc(":");
+          current = { value: null, body: [] }; cases.push(current);
+        } else {
+          if (!current) throw err(peek().line, "פקודה ב-switch לפני case/default");
+          current.body.push(parseStatement());
+        }
+      }
+      expectPunc("}");
+      return { type: "switch", expr, cases, line };
     }
 
     // השמה / קריאה / ++ / += ; eatSemi=false עבור חלקי for
@@ -384,6 +409,13 @@ window.CodeParser = (function () {
     const here = () => code.length;
     const patch = (idx) => { code[idx].target = here(); };
 
+    // מחסנית הקשרי לולאה/switch עבור break/continue
+    const ctxStack = [];
+    const pushCtx = (isLoop) => { const c = { breaks: [], continues: [], isLoop }; ctxStack.push(c); return c; };
+    const popCtx = () => ctxStack.pop();
+    const curBreakable = () => ctxStack[ctxStack.length - 1] || null;
+    const curLoop = () => { for (let i = ctxStack.length - 1; i >= 0; i--) if (ctxStack[i].isLoop) return ctxStack[i]; return null; };
+
     function normTarget(t) {
       if (t.kind === "portbit") return { ...t, bit: +t.bit };
       return t;
@@ -414,9 +446,13 @@ window.CodeParser = (function () {
         case "while": {
           const start = here();
           const jf = emit({ op: "jumpIfFalse", expr: node.cond, line: node.line });
+          const c = pushCtx(true);
           comp(node.body);
+          popCtx();
+          c.continues.forEach((i) => (code[i].target = start));   // continue → בדיקת התנאי
           emit({ op: "jump", target: start });
           patch(jf);
+          c.breaks.forEach((i) => (code[i].target = here()));     // break → אחרי הלולאה
           break;
         }
         case "for": {
@@ -424,10 +460,46 @@ window.CodeParser = (function () {
           const start = here();
           let jf = null;
           if (node.cond) jf = emit({ op: "jumpIfFalse", expr: node.cond, line: node.line });
+          const c = pushCtx(true);
           comp(node.body);
+          popCtx();
+          const incrLoc = here();
+          c.continues.forEach((i) => (code[i].target = incrLoc));  // continue → ההגדלה
           if (node.incr) comp(node.incr);
           emit({ op: "jump", target: start });
           if (jf !== null) patch(jf);
+          c.breaks.forEach((i) => (code[i].target = here()));      // break → אחרי הלולאה
+          break;
+        }
+        case "switch": {
+          const c = pushCtx(false);
+          const jumps = [];                                        // {idx, cs}
+          node.cases.forEach((cs) => {
+            if (cs.value === null) return;                         // default מטופל בנפרד
+            const cmp = { type: "binary", op: "==", left: node.expr, right: cs.value };
+            jumps.push({ idx: emit({ op: "jumpIfTrue", expr: cmp, line: node.line }), cs });
+          });
+          const dispatchEnd = emit({ op: "jump" });                // אם אף case לא תאם → default/סוף
+          const labels = new Map();
+          node.cases.forEach((cs) => { labels.set(cs, here()); cs.body.forEach(comp); });  // נפילה (fall-through) בין cases
+          const endLoc = here();
+          jumps.forEach(({ idx, cs }) => (code[idx].target = labels.get(cs)));
+          const def = node.cases.find((x) => x.value === null);
+          code[dispatchEnd].target = def ? labels.get(def) : endLoc;
+          popCtx();
+          c.breaks.forEach((i) => (code[i].target = endLoc));      // break → סוף ה-switch
+          break;
+        }
+        case "break": {
+          const c = curBreakable();
+          if (!c) throw err(node.line, "break מחוץ ללולאה/switch");
+          c.breaks.push(emit({ op: "jump", line: node.line }));
+          break;
+        }
+        case "continue": {
+          const c = curLoop();
+          if (!c) throw err(node.line, "continue מחוץ ללולאה");
+          c.continues.push(emit({ op: "jump", line: node.line }));
           break;
         }
       }

@@ -7,16 +7,53 @@
   <link rel="stylesheet" href="../css/style.css">
   <link rel="stylesheet" href="../css/content.css">
   <script src="../js/ui/theme.js"></script>
+  <style>
+    .ex-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(260px, 1fr)); gap: 16px; margin-top: 22px; }
+    .ex-card {
+      background: var(--panel); border: 1px solid var(--border); border-radius: 12px;
+      padding: 18px; display: flex; flex-direction: column; gap: 8px;
+      transition: border-color .15s, transform .1s; text-decoration: none; color: var(--text);
+    }
+    .ex-card:hover { border-color: var(--accent); transform: translateY(-2px); }
+    .ex-card .ex-top { display: flex; align-items: center; justify-content: space-between; gap: 8px; }
+    .ex-card h3 { font-size: 16px; margin: 0; }
+    .ex-stars { color: #f4b400; font-size: 13px; white-space: nowrap; }
+    .ex-card p { font-size: 13px; color: var(--text-dim); line-height: 1.6; margin: 0; flex: 1; }
+    .ex-card .solve { align-self: flex-start; margin-top: 6px; }
+    .ex-card .solve span {
+      display: inline-block; background: var(--accent-2); color: #fff; border: 1px solid var(--accent);
+      border-radius: 7px; padding: 7px 14px; font-size: 13px;
+    }
+  </style>
 </head>
 <body>
   <script src="../js/ui/nav.js"></script>
 
   <div class="page">
-    <div class="coming-soon">
-      <div class="big">📝</div>
-      <h2>תרגילים</h2>
-      <p>אזור התרגולים נמצא בבנייה. בקרוב יתווספו כאן תרגילים מדורגים עם בדיקה אוטומטית.</p>
-    </div>
+    <h1>📝 תרגילים</h1>
+    <p class="lead">
+      תרגילים מדורגים בתכנות 8051 עם <b>בדיקה אוטומטית</b>. בחר תרגיל, פתור אותו בסימולטור,
+      ולחץ "בדוק פתרון" כדי לקבל משוב מיידי — בדיוק כמה בדיקות עברת.
+    </p>
+    <div class="ex-grid" id="ex-grid"></div>
   </div>
+
+  <script src="../js/business/builtinExercises.js"></script>
+  <script>
+    (function () {
+      const grid = document.getElementById("ex-grid");
+      const esc = (s) => String(s == null ? "" : s).replace(/[&<>"']/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c]));
+      const stars = (n) => "★".repeat(n) + "☆".repeat(3 - n);
+      grid.innerHTML = (window.BuiltinExercises || []).map((ex) => `
+        <a class="ex-card" href="simulator.html?bex=${encodeURIComponent(ex.id)}">
+          <div class="ex-top">
+            <h3>${esc(ex.title)}</h3>
+            <span class="ex-stars" title="דרגת קושי">${stars(ex.difficulty || 1)}</span>
+          </div>
+          <p>${esc(ex.instructions)}</p>
+          <div class="solve"><span>פתור →</span></div>
+        </a>`).join("");
+    })();
+  </script>
 </body>
 </html>

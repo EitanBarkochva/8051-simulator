@@ -52,6 +52,9 @@
 .led-flange { fill: #9aa2ab; stroke: rgba(0, 0, 0, .35); stroke-width: .5; }
 .led-leg    { fill: none; stroke: #9aa1a8; stroke-width: 2.4; stroke-linecap: round; stroke-linejoin: round; }
 .led-shine  { fill: #ffffff; opacity: .45; }
+/* LED RGB — הכיפה מקבלת את הצבע המעורב מהקוד; שקופה כשכבויה */
+.rgb-dome { fill: #e2e6ea; transition: fill .08s, filter .08s; }
+.rgb-label { text-align: center; font-family: var(--mono); font-size: 10px; color: var(--text-dim); margin-top: 2px; }
 /* ===== נקודות חיבור = רגלי הרכיב (.lead) ===== */
 .lead { cursor: crosshair; }
 /* רגלי SVG (LED / 7-seg / זמזם) — נקודת הלחמה בקצה */

@@ -41,6 +41,7 @@ window.Canvas = (function () {
       comp.type === "button"     ? buttonMarkup(comp) :
       comp.type === "slideswitch"? slideSwitchMarkup(comp) :
       comp.type === "sevenseg"   ? sevenSegMarkup(comp) :
+      comp.type === "rgbled"     ? rgbLedMarkup(comp) :
       comp.type === "display"    ? displayMarkup(comp) :
       comp.type === "resistor"   ? resistorMarkup(comp) :
       comp.type === "pot"        ? potMarkup(comp) :
@@ -115,6 +116,30 @@ window.Canvas = (function () {
       <div class="led-colors">
         ${LED_COLORS.map((c) => `<span class="swatch" data-color="${c}" style="background:${c}" title="${c}"></span>`).join("")}
       </div>`;
+  }
+
+  function rgbLedMarkup(comp) {
+    return `
+      <div class="comp-head">
+        <span class="comp-title">${comp.def.name} #${comp.id}</span>
+        <button class="comp-del" title="מחק">✕</button>
+      </div>
+      <div class="led-wrap" style="width:72px;">
+        <svg class="led-svg" viewBox="0 0 72 100" width="72" height="100">
+          <path class="led-leg" d="M20 56 L14 92"/>
+          <path class="led-leg" d="M30 56 L28 94"/>
+          <path class="led-leg" d="M42 56 L44 94"/>
+          <path class="led-leg" d="M52 56 L58 92"/>
+          <rect class="led-flange" x="18" y="50" width="36" height="7" rx="2.5"/>
+          <path class="led-dome rgb-dome" d="M22 53 L22 24 A14 14 0 0 1 50 24 L50 53 Z"/>
+          <ellipse class="led-shine" cx="29" cy="20" rx="3" ry="7"/>
+          <circle class="lead" data-comp="${comp.id}" data-leg="0" cx="14" cy="92" r="6"><title>R — אדום</title></circle>
+          <circle class="lead" data-comp="${comp.id}" data-leg="1" cx="28" cy="94" r="6"><title>G — ירוק</title></circle>
+          <circle class="lead" data-comp="${comp.id}" data-leg="2" cx="44" cy="94" r="6"><title>B — כחול</title></circle>
+          <circle class="lead" data-comp="${comp.id}" data-leg="3" cx="58" cy="92" r="6"><title>משותף (−)</title></circle>
+        </svg>
+      </div>
+      <div class="rgb-label">R · G · B</div>`;
   }
 
   function displayMarkup(comp) {
@@ -445,6 +470,18 @@ window.Canvas = (function () {
     if (!comp._el) return;
     if (comp.type === "led") {
       comp._el.querySelector(".led-bulb").classList.toggle("on", Components.isActive(comp));
+    } else if (comp.type === "rgbled") {
+      const on = (leg) => { const c = comp.conns[leg]; return !!c && Registers.getBit(c.port, c.bit) === 1; };
+      const r = on(0), g = on(1), b = on(2);
+      const dome = comp._el.querySelector(".rgb-dome");
+      if (r || g || b) {
+        const col = `rgb(${r ? 255 : 0},${g ? 255 : 0},${b ? 255 : 0})`;
+        dome.style.fill = col;
+        dome.style.filter = `brightness(1.12) drop-shadow(0 0 5px ${col}) drop-shadow(0 0 11px ${col})`;
+      } else {
+        dome.style.fill = "#e2e6ea";
+        dome.style.filter = "brightness(.72) saturate(.6)";
+      }
     } else if (comp.type === "button") {
       comp._el.querySelector(".btn-push").classList.toggle("pressed", !!comp.pressed);
     } else if (comp.type === "sevenseg") {
